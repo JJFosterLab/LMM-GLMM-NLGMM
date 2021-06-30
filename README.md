@@ -6,6 +6,8 @@ Models are run on simulated data, generated using a very basic model similar (bu
 ## Useful references
 For more information about (G)LMMs, see https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
 
+For common problems and sources of confusion see https://stats.stackexchange.com/questions/tagged/lme4-nlme?tab=Votes and https://stats.stackexchange.com/questions/tagged/mixed-model?tab=Votes
+
 For more info about fitting non-linear models with ```brms``` see  https://paul-buerkner.github.io/brms/articles/brms_nonlinear.html
 
 For an applied example of an NLGMM see https://github.com/JohnKirwan/Olsson_colour_discrimination
