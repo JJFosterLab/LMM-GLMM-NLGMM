@@ -226,7 +226,7 @@ mixmod.null <- lmer(formula = response_y ~
 #describe the data better than the random effects model alone.
 extractAIC(mixmod.max)[2]#2nd component is the AIC, 1st is the d.f.
 extractAIC(mixmod.null)[2]
-#If AIC is lower, then the maximal model fits
+#If AIC is lower for the maximal model, then the maximal model fits
 # -4706.072 < 22160.38
 
 #We can also perform a likelihood ratio test, confusingly called "anova"
