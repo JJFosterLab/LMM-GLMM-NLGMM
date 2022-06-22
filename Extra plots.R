@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2022 06 16
+#     MODIFIED:	James Foster              DATE: 2022 06 22
 #
 #  DESCRIPTION: Extra plots for introducing hypothesis testing and modelling.
 #
@@ -59,7 +59,7 @@ polygon(x = c(-x_undert, rev(-x_undert)),
         border = 'cyan')
 
 
-# Logit transform of sinusoid ---------------------------------------------
+# Logit transform of sigmoid ---------------------------------------------
 n_per_obs = 100
 
 yy = rbinom(n = length(xx),
