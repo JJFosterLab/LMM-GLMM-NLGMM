@@ -1,8 +1,8 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2022 06 16
+#     MODIFIED:	James Foster              DATE: 2022 06 22
 #
-#  DESCRIPTION: An example ANOVA, using the "aov" and "lm" base R functions.
+#  DESCRIPTION: Example two-group hypothesis tests, using the "t.test" and "wilcox.test" base R functions.
 #
 #       USAGE:  First install the 'report' package as suggested by
 #               Rstudio, or by running install.packages('report')
@@ -116,7 +116,7 @@ dt_unequal = within(dt, #Within our data frame,
                       # find all values for condition B
                       value[condition %in% 'B'] = rnorm(n = 10, #sample size of 10
                                                         mean = 1.5, # mean of 1.5 (i.e. different from A)
-                                                        sd = 0.15) # standard deviation of 0.6 (i.e. twice that for A)
+                                                        sd = 0.15) # standard deviation of 0.15 (i.e. half that for A)
                     })
 
 
