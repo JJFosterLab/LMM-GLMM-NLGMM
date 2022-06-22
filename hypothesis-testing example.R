@@ -1,8 +1,8 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2022 06 16
+#     MODIFIED:	James Foster              DATE: 2022 06 22
 #
-#  DESCRIPTION: An example ANOVA, using the "aov" and "lm" base R functions.
+#  DESCRIPTION: Example two-group hypothesis tests, using the "t.test" and "wilcox.test" base R functions.
 #
 #       USAGE:  First install the 'report' package as suggested by
 #               Rstudio, or by running install.packages('report')
