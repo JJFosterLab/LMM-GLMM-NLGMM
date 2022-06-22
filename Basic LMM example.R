@@ -1,3 +1,23 @@
+# Details ---------------------------------------------------------------
+#       AUTHOR:	James Foster              DATE: 2021 06 27
+#     MODIFIED:	James Foster              DATE: 2022 06 22
+#
+#  DESCRIPTION: An example mixed-effect model, using the "lmer" from "lme4".
+#
+#       USAGE:  First install the packages :'lme4', 'report', 'emmeans', 'lmeTest'
+#               and 'pbkrtest'  as suggested by Rstudio, or by running
+#               install.packages('report'); install.packages('emmeans) etc. ...
+#               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
+#               Organised into subsections in overview (ctrl+shift+o)
+#
+#	   CHANGES: -
+#
+#   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
+#               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
+#
+#TODO
+#- Add comments
+
 # Basic Mixed Model Script ------------------------------------------------
 
 #  Welcome to R!
@@ -174,8 +194,8 @@ legend(x = 'bottomright',
        legend = unique(dta$type),
        pch = c(20, 21))
 
-             
-             
+
+
 # Fit the maximal model ---------------------------------------------------
 #	Fit the most complicated possible model							#
 
@@ -207,7 +227,7 @@ legend(x = 'bottomright',
 
 # Load packages required for mixed-effects modelling ----------------------
 require(lme4)
-             
+
 # Fit the model -----------------------------------------------------------
 #Maximal model with random intercepts for individuals
 mixmod.max = lmer(formula = response_y ~
@@ -289,4 +309,3 @@ print(ht1_ph$contrasts)
 #     ) * 2,
 #     digits =  3
 #   )
-                           

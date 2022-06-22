@@ -1,3 +1,24 @@
+# Details ---------------------------------------------------------------
+#       AUTHOR:	James Foster              DATE: 2021 06 27
+#     MODIFIED:	James Foster              DATE: 2022 06 22
+#
+#  DESCRIPTION: An example generalised mixed-effect model, using "glmer" from
+#               the "lme4" package.
+#
+#       USAGE:  First install the packages :'lme4', 'report', 'emmeans', 'lmeTest'
+#               and 'pbkrtest'  as suggested by Rstudio, or by running
+#               install.packages('report'); install.packages('emmeans) etc. ...
+#               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
+#               Organised into subsections in overview (ctrl+shift+o)
+#
+#	   CHANGES: -
+#
+#   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
+#               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
+#
+#TODO
+#- Add comments
+
 # Simuluate some data -----------------------------------------------------
 set.seed(17070523)#seed the random number generator with Linnaeus' birthday
 
@@ -204,7 +225,7 @@ glmm.null = glmer(formula = correct_incorrect~
                    family = binomial(link = 'logit')
 )
 # Model comparison --------------------------------------------------------
-#To prove any fixed effects, the mixed-effects model has to 
+#To prove any fixed effects, the mixed-effects model has to
 #describe the data better than the random effects model alone.
 extractAIC(glmm.max)[2]#2nd component is the AIC, 1st is the d.f.
 extractAIC(glmm.null)[2]
@@ -214,12 +235,11 @@ extractAIC(glmm.null)[2]
 anova(glmm.max, glmm.null, test = 'Chisq')
 #This gives the same answer as the AIC, but the difference can be reported with
 #a test statistic and p-value
-#           npar    AIC    BIC  logLik deviance  Chisq Df Pr(>Chisq)    
-# glmm.null    2 3590.1 3602.0 -1793.1   3586.1                         
+#           npar    AIC    BIC  logLik deviance  Chisq Df Pr(>Chisq)
+# glmm.null    2 3590.1 3602.0 -1793.1   3586.1
 # glmm.max    14  685.8  768.9  -328.9    657.8 2928.3 12  < 2.2e-16 ***
 
 #report:
 #change in deviance = 2928.3
 #change in degrees of freedom = 12
 # p < 2.2e-16 (the smallest number the computer can think of)
-
