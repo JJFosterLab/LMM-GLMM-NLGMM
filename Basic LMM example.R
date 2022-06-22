@@ -2,7 +2,7 @@
 #       AUTHOR:	James Foster              DATE: 2021 06 27
 #     MODIFIED:	James Foster              DATE: 2022 06 22
 #
-#  DESCRIPTION: An example mixed-effect model, using the "lmer" from "lme4".
+#  DESCRIPTION: An example mixed-effect model, using "lmer" from the "lme4" package.
 #
 #       USAGE:  First install the packages :'lme4', 'report', 'emmeans', 'lmeTest'
 #               and 'pbkrtest'  as suggested by Rstudio, or by running
