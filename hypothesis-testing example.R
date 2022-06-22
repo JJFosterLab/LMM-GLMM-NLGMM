@@ -116,7 +116,7 @@ dt_unequal = within(dt, #Within our data frame,
                       # find all values for condition B
                       value[condition %in% 'B'] = rnorm(n = 10, #sample size of 10
                                                         mean = 1.5, # mean of 1.5 (i.e. different from A)
-                                                        sd = 0.15) # standard deviation of 0.6 (i.e. twice that for A)
+                                                        sd = 0.15) # standard deviation of 0.15 (i.e. half that for A)
                     })
 
 
