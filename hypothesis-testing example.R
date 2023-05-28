@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2022 06 22
+#     MODIFIED:	James Foster              DATE: 2023 05 28
 #
 #  DESCRIPTION: Example two-group hypothesis tests, using the "t.test" and "wilcox.test" base R functions.
 #
