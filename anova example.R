@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2022 06 16
+#     MODIFIED:	James Foster              DATE: 2023 05 28
 #
 #  DESCRIPTION: An example ANOVA, using the "aov" and "lm" base R functions.
 #
@@ -60,7 +60,7 @@ dt = data.frame(value = c(dt_A, #"c(...,...)" combines the data into a single ve
                 #we'll call the data from all conditions 'value'
                 condition = c(fct_A, #"c(...,...)" combines the labels into a single vector
                               fct_B)) #we'll call the condition labels 'condition'
-#The resulting data frame is organised clearly in "narrow format" https://en.wikipedia.org/wiki/Wide_and_narrow_data
+#The resulting data frame is organised in "narrow format" https://en.wikipedia.org/wiki/Wide_and_narrow_data
 #We can view the data in table format.
 View(dt)#Close the viewing tab to return to the main script.
 #you could also read in a data frame with: dt = read.table(...)
@@ -193,7 +193,7 @@ print(av_ph$contrasts)#print the "contrast" (comparison) part of the test
 ## contrast estimate   SE df t.ratio p.value
 ## A - B    -0.41687 0.13 27 -3.212  0.0102 
 ## A - C    -0.00924 0.13 27 -0.071  0.9998 
-## B - C     0.40763 0.13 27  3.140  0.0122 
+## B - C     0.40763 0.13 27  3.140  0.0121 
 ## 
 ## P value adjustment: sidak method for 3 tests 
 

@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2021 06 27
-#     MODIFIED:	James Foster              DATE: 2022 06 22
+#     MODIFIED:	James Foster              DATE: 2023 05 28
 #
 #  DESCRIPTION: An example mixed-effect model, using "lmer" from the "lme4" package.
 #
@@ -12,7 +12,7 @@
 #
 #	   CHANGES: -
 #
-#   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
+#   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
 #               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
 #
 #TODO
@@ -123,11 +123,11 @@ sys_win = Sys.info()[['sysname']] == 'Windows'
 #On computers set up by JMU Würzburg, use user profile instead of home directory
 if (sys_win) {
   #get rid of all the backslashes
-  root_dir <-
+  root_dir =
     gsub('\\\\', '/', Sys.getenv('USERPROFILE'))#Why does windows have to make this so difficult
 } else{
   #Root directory should be the "HOME" directory on a Mac (or Linux?)
-  root_dir <- Sys.getenv('HOME')#Life was easier on Mac
+  root_dir = Sys.getenv('HOME')#Easier on Mac
 }
 file_name = 'simulated_data.csv'
 #write this data to an Excel-compatible "comma separated values" file
@@ -188,11 +188,14 @@ legend(
   x = 'topright',
   legend = unique(dta$animal),
   col = clz,
-  pch = 20
+  pch = 20,
+  cex = 0.7
 )
 legend(x = 'bottomright',
        legend = unique(dta$type),
-       pch = c(20, 21))
+       pch = c(20, 21),
+       cex = 0.7
+       )
 
 
 
@@ -229,11 +232,16 @@ legend(x = 'bottomright',
 require(lme4)
 
 # Fit the model -----------------------------------------------------------
+#set some useful optimiser settings for models with many paramters
+ctrl_opt = lmerControl(optimizer = 'bobyqa',
+                       control = list(maxfun = 1e5)) #efficient optimiser for models with many paramters
 #Maximal model with random intercepts for individuals
 mixmod.max = lmer(formula = response_y ~
                     stimulus * type +
                     (1 + stimulus * type | animal),
-                  data = dta)
+                  data = dta,
+                  control = ctrl_opt
+                  )
 #boundary (singular) fit: see ?isSingular
 #Some random effects are too small to estimate properly, common warning
 #Null model, with only random effects
@@ -247,7 +255,7 @@ mixmod.null <- lmer(formula = response_y ~
 extractAIC(mixmod.max)[2]#2nd component is the AIC, 1st is the d.f.
 extractAIC(mixmod.null)[2]
 #If AIC is lower for the maximal model, then the maximal model fits
-# -4706.072 < 22160.38
+# -4706.033 < 22160.38
 
 #We can also perform a likelihood ratio test, confusingly called "anova"
 anova(mixmod.max, mixmod.null,test = 'Chisq')
@@ -262,50 +270,110 @@ anova(mixmod.max, mixmod.null,test = 'Chisq')
 #change in degrees of freedom = 12
 # p < 2.2e-16 (the smallest number the computer can think of)
 
-# Inspect model -----------------------------------------------------------
-require(lmerTest)
-mixmod.max_tests = lmerTest::as_lmerModLmerTest(mixmod.max)
-summary(mixmod.max_tests)
-## Fixed effects:
-##                      Estimate Std. Error        df t value Pr(>|t|)
-## (Intercept)          5.082471   0.296562  9.005755  17.138 3.50e-08 ***
-##   stimulus           2.979613   0.280295  9.003568  10.630 2.14e-06 ***
-##   typebeta           2.490391   0.006981 52.344033 356.720  < 2e-16 ***
-##   stimulus:typebeta  3.513642   0.539917  9.009061   6.508  0.00011 ***
+#inspect maximal model
+anova(mixmod.max) 
+## Analysis of Variance Table
+## npar  Sum Sq Mean Sq    F value
+## stimulus         1   83.27   83.27   8700.789
+## type             1 1225.14 1225.14 128016.524
+## stimulus:type    1    0.40    0.40     42.314
 
-#significant effects of each variable
-#the stimulus type explains the most variation
-#and therefore has the largest t value
+#the large F values give a general indication of effect sizes
+#but for a mixed effects model we need to use the post-hoc methods 
+#below to determine their significance
+
+# Check model reduction options -------------------------------------------
+#If we are not sure that we need all of our parameters, we might consider model reduction.
+#This is not always necessary, and without a good rationale it may be preferable
+#to use the maximal model, which controls for all possible combinations of parameters.
+
+#can we remove one or more fixed effect to improve the model fit?
+
+#effect of stimulus-type interaction
+no_int = update(object = mixmod.max, 
+                .~. - stimulus:type - #remove the interaction
+                    (1 + stimulus * type | animal) + #remove random effects that include it
+                    (1 + stimulus + type | animal) #replace them with random effect that exclude it
+                  )
+anova(mixmod.max,
+      no_int)
+##              npar   AIC   BIC  logLik deviance Chisq Df Pr(>Chisq)    
+## no_int       10 15687 15746 -7833.4    15667                        
+## mixmod.max   15 -4706 -4617  2368.0    -4736 20403  5  < 2.2e-16 ***
+#larger AIC following the parameter's removal indicates 
+#that the model without an interaction is a significantly poorer fit
+#therefore, there is a significant interaction.
+
+#We can also use this method to report the strength of our fixed effects
+#we would report this as:
+#likelihood ratio test, change in deviance  = 20403, d.f. = 5, p < 0.001
+
+#effect of stimulus
+no_stimulus = update(object = no_int, 
+                      .~. - stimulus - #remove the effect of stimulus
+                        (1 + stimulus + type | animal) + #remove random effects that include it
+                        (1 + type | animal) #replace them with random effect that exclude it
+                    )
+anova(no_int,
+      no_stimulus)
+##              npar   AIC   BIC   logLik deviance  Chisq Df Pr(>Chisq)    
+## no_stimulus    6 21175 21211 -10581.7    21163                         
+## no_int        10 15687 15746  -7833.4    15667 5496.6  4  < 2.2e-16 ***
+
+#larger AIC following the parameter's removal indicates 
+#that the model without an effect of stimulus is a significantly poorer fit
+#therefore, there is a significant effect of stimulus
+#we would report this as:
+#likelihood ratio test, change in deviance  = 5496.6, d.f. = 4, p < 0.001
+
+#effect of type
+no_type = update(object = no_stimulus, 
+                      .~. - type - #remove the effect of type
+                        (1 + type | animal) + #remove random effects that include it
+                        (1 | animal) #replace them with random effect that exclude it
+                    )
+anova(no_stimulus,
+      no_type)
+##              npar   AIC   BIC   logLik deviance  Chisq Df Pr(>Chisq)    
+## no_type        3 22160 22178 -11077    22154                         
+## no_stimulus    6 21175 21211 -10582    21163 991.04  3  < 2.2e-16 ***
+
+#larger AIC following the parameter's removal indicates 
+#that the model without an effect of type is a significantly poorer fit
+#therefore, there is a significant effect of type
+#we would report this as:
+#likelihood ratio test, change in deviance  = 991.04, d.f. = 3, p < 0.001
 
 # Post-hoc comparisons ----------------------------------------------------
 #Load the package for post-hoc comparisons
 require(emmeans)
 require(pbkrtest)# Used for calculating DF in mixed-effects model
-#perform a general linear hypothesis tests on type
-ht1 = emmeans(
-  object = mixmod.max,
-  spec = pairwise ~ type,
-  #compare the effects of different types
-  adjust = 'sidak')
-#multiple comparisons with Sidak's correction
-#Perform the post hoc tests between these means using the test() function
-# from the 'emmeans' package (and not any other function called 'test()').
-ht1_ph = emmeans::test(object = ht1)
-# print the "contrast" (comparison) part of the test
-print(ht1_ph$contrasts)
-## contrast     estimate   SE df t.ratio p.value
-## alpha - beta      -13 1.62  9 -8.044  <.0001
-##
-## Degrees-of-freedom method: kenward-roger
-#After accounting for effects of stimulus strength, its interaction with type,
-# and all random effects of individual animals, responses to stimulus
-# alpha were 13.0 weaker than for stimlus beta, t(9.0) = -8.04, p <0.0001.
-#N.B. for a precise, two.tailed estimate of p(>|t|), try
-# signif(
-#     pt(
-#       q = ht1_ph$contrasts$t.ratio,
-#       df = 9,
-#       lower.tail = TRUE
-#     ) * 2,
-#     digits =  3
-#   )
+
+# Calculate overall discrete effects
+emm_intercepts = emmeans(mixmod.max,
+                         specs = list(pairwise~type),
+                         #compare the overall effects of different types
+                         adjust = 'sidak')
+summary(emm_intercepts)
+## $`pairwise differences of type`
+## 1            estimate   SE df t.ratio p.value
+## alpha - beta      -13 1.62  9 -8.043  <.0001 
+#As for the likelihood ratio test, we see that there is a large effect of 
+#type on average response (as there should be, see type_mean to see the different values we started with).
+#The estimated difference is that alpha has an average response strength that is
+#weaker by "13" response strength units.
+
+# Calculate post-hoc comparisons for continuous effects (slope)
+emm_slopes_interact = emtrends(mixmod.max,
+                     specs = list(pairwise~type),
+                     var = 'stimulus',
+                     #compare the effects of different types on response/stimulus slopes
+                     adjust = 'sidak')
+summary(emm_slopes_interact)
+## $`pairwise differences of type`
+## 1            estimate   SE df t.ratio p.value
+## alpha - beta    -3.51 0.54  9 -6.505  0.0001 
+#there is a significant difference in the stimulus-response relationship 
+#between the two types. This is as specified in our input variables (type_slope) 
+#for the simulation. The estimated difference is that alpha has an average 
+#stimulus-response slope that is weaker by "3.51" response strength units per stimulus unit.
