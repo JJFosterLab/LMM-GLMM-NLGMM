@@ -119,29 +119,32 @@ View(sim_data)
 
 
 # Write/Read data ---------------------------------------------------------
-#check the operating system and assign a logical flag (TRUE or FALSE)
-sys_win = Sys.info()[['sysname']] == 'Windows'
-#On computers set up by JMU Würzburg, use user profile instead of home directory
-if (sys_win) {
+# Find a good save location
+if(Sys.info()[['sysname']] == 'Windows')
+{
   #get rid of all the backslashes
-  root_dir =
-    gsub('\\\\', '/', Sys.getenv('USERPROFILE'))#Why does windows have to make this so difficult
-} else{
-  #Root directory should be the "HOME" directory on a Mac (or Linux?)
-  root_dir = Sys.getenv('HOME')#Easier on Mac
+  ltp = gsub('\\\\', '/', Sys.getenv('USERPROFILE'))
+}else
+{#Root directory should be the "HOME" directory on a Mac (or Linux?)
+  ltp = Sys.getenv('HOME')#Easier on Mac
 }
+root_dir = tryCatch(expr = #look in the folder containing this file: sys.frame(1)$ofile
+                      {file.path(dirname(sys.frame(1)$ofile))},
+                    error = function(e)
+                    {#if that fails, try to find the "Documents" folder
+                      file.path(ltp,'Documents')
+                    }
+)
 file_name = 'simulated_data.csv'
 #write this data to an Excel-compatible "comma separated values" file
 write.csv(
   file = file.path(root_dir,
-                   'Documents', #assume the user has a folder called 'Documents' in the root environment
                    file_name),
   x = sim_data,
   row.names = F
 )
 #Now read in this file, or another file in the same format
 dta = read.csv(file = file.path(root_dir,
-                                'Documents', #assume the user has a folder called 'Documents' in the root environment
                                 file_name),
                header = T)
 #format categorical variables as "factors"
