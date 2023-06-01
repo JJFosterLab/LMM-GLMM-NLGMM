@@ -16,7 +16,8 @@
 #               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
 #
 #TODO
-#- Add comments
+#- Add comments +
+#- Plot predictions
 
 # Basic Mixed Model Script ------------------------------------------------
 
@@ -232,9 +233,8 @@ legend(x = 'bottomright',
 require(lme4)
 
 # Fit the model -----------------------------------------------------------
-#set some useful optimiser settings for models with many paramters
-ctrl_opt = lmerControl(optimizer = 'bobyqa',
-                       control = list(maxfun = 1e5)) #efficient optimiser for models with many paramters
+#set some useful optimiser settings for models with many parameters
+ctrl_opt = lmerControl(optimizer = 'bobyqa')
 #Maximal model with random intercepts for individuals
 mixmod.max = lmer(formula = response_y ~
                     stimulus * type +
