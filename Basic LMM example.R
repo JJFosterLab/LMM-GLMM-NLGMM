@@ -14,6 +14,14 @@
 #
 #   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
 #               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
+#               
+#               Russell V. Lenth (2021). emmeans: Estimated Marginal Means, 
+#               AKA Least-Squares Means. R package version 1.5.4. 
+#               https://cran.r-project.org/web/packages/emmeans/vignettes/basics.html
+#
+#               Šidák, Z. K. (1967). "Rectangular Confidence Regions for the 
+#               Means of Multivariate Normal Distributions". J. Am. Statist. Assoc. 
+#               62 (318): 626–633. doi:10.1080/01621459.1967.10482935.
 #
 #TODO
 #- Add comments +
