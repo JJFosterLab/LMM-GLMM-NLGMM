@@ -178,7 +178,7 @@ clz = sample(clz)#Randomise order?
 
 #general overview
 #aggragate the proportion correct for each animal
-agg = aggregate(x = correct_incorrect~
+agg = aggregate(correct_incorrect~
                    stimulus * type * animal,
                  data = dta,
                 FUN = mean)
