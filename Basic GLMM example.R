@@ -11,7 +11,7 @@
 #               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
 #               Organised into subsections in overview (ctrl+shift+o)
 #
-#	   CHANGES: -
+#	   CHANGES: - plots
 #
 #   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
 #               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
@@ -26,7 +26,9 @@
 #
 #TODO
 #- Add comments +
-#- Plot predictions
+#- Plot predictions +
+#- Example with lower variation
+#- Example with weaker slopes
 
 # Simuluate some data -----------------------------------------------------
 set.seed(17070523)#seed the random number generator with Linnaeus' birthday
@@ -47,7 +49,7 @@ slope_mean = 3.00#population slope
 slope_sd = 1.03#population slope standard deviation
 type_mean = 2.50# effect of stimulus type 2 on average response
 type_slope = 3.5# effect of type 2 on response to stimulus intensity
-type_animal_sd = 0.55 # sd of effect of animal on effect of type 2
+type_animal_sd = 0.55#0.15# # sd of effect of animal on effect of type 2
 extra_error_sd = 0.10#small source of unnaccounted error
 
 
@@ -369,6 +371,140 @@ summary(emm_slopes_interact)
 #stimulus-response slope that is weaker by "-7.71". That is for every increase 
 #in stimulus intensity of 1, the odds of a correct response increase 7.71x faster
 #for beta than alpha.
+
+
+# Plot predictions --------------------------------------------------------
+
+# . Extract predictions ---------------------------------------------------
+#check all relevant variables for predictions
+formula(glmm.max)
+## lag ~ 1 + temperature + treatment + (1 + temperature | Animal.number)
+newdta = with(dta,
+              expand.grid(stimulus = seq(from = min(stimulus),
+                                         to = max(stimulus),
+                                         length.out = 1e2),
+                          type = unique(type),
+                          animal = unique(animal)
+              ) 
+)
+#predictions (mean estimate)
+prd = predict(glmm.max,
+              newdata = newdta,
+              type = 'response'
+)
+#bootstrap the confidence intervals (can take a while...)
+pfun = function(x)
+{
+  predict(x,
+          newdata = newdta, 
+          type = "response")
+}
+# library(snow)#parallel processing requires "snow" on Windows
+#Really benefits from some parallel processing
+avail.cores = parallel::detectCores() - 1
+clt = parallel::makeCluster(spec = avail.cores, 
+                            type="SOCK")
+parallel::clusterExport(clt,
+                        list('glmm.max',
+                             'dta',
+                             'newdta'
+                        )
+)
+#this takes a long time to simulate
+system.time({
+  bt = bootMer(glmm.max,
+               FUN = pfun,
+               nsim = 50,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
+               re.form = NULL,#NA for fixed effects, NULL to include random effects
+               parallel = ifelse(test = Sys.info()[['sysname']] == 'Windows',
+                                 yes =  "snow",
+                                 no =  "multicore"),
+               ncpus = parallel::detectCores()-1, #leave one processor available for user
+               cl = clt #the parallel cluster prepared above
+  )
+})
+#now it has been used, close the cluster
+parallel::stopCluster(clt)
+#For reference, confint gives confidence intervals for each datapoint
+param_ci = confint(bt) #fast method
+#To get CI for only fixed effects, align and aggregate bootstrap estimates
+pred_q = aggregate(pred ~ stimulus*type, #aggregate predictions by fixed effect
+                   FUN = quantile, #calculate as quantiles of bootstrap predictions
+                   data = with(bt, 
+                               data.frame(newdta, 
+                                          pred = c(t(t)) #convert from rows to columns and align 
+                               ) 
+                   ),
+                   probs = c(0,1) + c(1,-1)*0.05/2) #using alpha = 0.05, make two-tailed confidence intervals
+# find mean prediction across 
+mod_mean = aggregate(prd ~ stimulus*type, 
+                     data = cbind(newdta, prd), 
+                     FUN = function(x){plogis(mean(qlogis(x)))})
+#merge together
+param_data = merge(merge(newdta, pred_q, all = TRUE), 
+                   mod_mean)
+#rename for plotting
+mod_pred = within(param_data,
+                  {
+                    mod_mean = prd
+                    CI_02.5 = pred[,'2.5%']
+                    CI_97.5 = pred[,'97.5%']
+                    rm(list = c('pred','prd'))
+                  }
+)
+
+# . Plot predictions ------------------------------------------------------
+
+#plot all data together
+with(agg,
+     {
+       plot(x = stimulus,
+            y = correct_incorrect,
+            bg = adjustcolor(col = c('orange2', 'darkblue')[ 1 + type %in% 'alpha'],
+                             alpha.f = 0.5), # 50% opacity
+            col = 'black',
+            pch = 21) # dots
+     }
+)
+#add model and shaded confidence intervals
+#stimulus type alpha
+with(subset(mod_pred, type %in% 'alpha'),
+     {
+       polygon(x = c(sort(stimulus), sort(stimulus,decreasing = TRUE)),
+               y = 
+                 c(lowerCI = CI_02.5[order(stimulus)],
+                   upperCI = CI_97.5[order(stimulus,decreasing = TRUE)]
+                 ),
+               col = adjustcolor(col = 'darkblue',
+                                 alpha.f = 0.2),
+               border = NA
+       )
+       lines(sort(stimulus),
+             mod_mean[order(stimulus)],#
+             col = 'darkblue',
+             pch = 10
+       )
+     }
+)
+#stimulus type beta
+with(subset(mod_pred, type %in% 'beta'),
+     {
+       polygon(x = c(sort(stimulus), sort(stimulus,decreasing = TRUE)),
+               y = 
+                 c(lowerCI = CI_02.5[order(stimulus)],
+                   upperCI = CI_97.5[order(stimulus,decreasing = TRUE)]
+                 ),
+               col = adjustcolor(col = 'orange2',
+                                 alpha.f = 0.2),
+               border = NA
+       )
+       lines(sort(stimulus),
+             mod_mean[order(stimulus)],
+             col = 'orange2',
+             pch = 10
+       )
+     }
+)
 
 
 

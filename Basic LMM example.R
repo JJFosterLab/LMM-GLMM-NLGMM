@@ -10,7 +10,7 @@
 #               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
 #               Organised into subsections in overview (ctrl+shift+o)
 #
-#	   CHANGES: -
+#	   CHANGES: - plots
 #
 #   REFERENCES: Bates et al., (2022) Fitting Linear Mixed-Effects Models Using lme4,
 #               https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
@@ -25,7 +25,7 @@
 #
 #TODO
 #- Add comments +
-#- Plot predictions
+#- Plot predictions +
 
 # Basic Mixed Model Script ------------------------------------------------
 
@@ -388,3 +388,139 @@ summary(emm_slopes_interact)
 #between the two types. This is as specified in our input variables (type_slope) 
 #for the simulation. The estimated difference is that alpha has an average 
 #stimulus-response slope that is weaker by "3.51" response strength units per stimulus unit.
+
+
+# Plot predictions --------------------------------------------------------
+
+# . Extract predictions ---------------------------------------------------
+#check all relevant variables for predictions
+formula(mixmod.max)
+## lag ~ 1 + temperature + treatment + (1 + temperature | Animal.number)
+newdta = with(dta,
+              expand.grid(stimulus = unique(stimulus),
+                          type = unique(type),
+                          animal = unique(animal)
+              ) 
+)
+#predictions (mean estimate)
+prd = predict(mixmod.max,
+              newdata = newdta,
+)
+#bootstrap the confidence intervals (can take a while...)
+pfun = function(x)
+{
+  predict(x,
+          newdata = newdta)
+}
+# library(snow)#parallel processing requires "snow" on Windows
+#Really benefits from some parallel processing
+avail.cores = parallel::detectCores() - 1
+clt = parallel::makeCluster(spec = avail.cores, 
+                            type="SOCK")
+parallel::clusterExport(clt,
+                        list('mixmod.max',
+                             'dta',
+                             'newdta'
+                        )
+)
+#this takes a long time to simulate
+system.time({
+  bt = bootMer(mixmod.max,
+               FUN = pfun,
+               nsim = 100,#100 takes ≈60 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
+               re.form = NA,#NA for fixed effects, NULL to include random effects
+               parallel = ifelse(test = Sys.info()[['sysname']] == 'Windows',
+                                 yes =  "snow",
+                                 no =  "multicore"),
+               ncpus = parallel::detectCores()-1, #leave one processor available for user
+               cl = clt #the parallel cluster prepared above
+  )
+})
+#now it has been used, close the cluster
+parallel::stopCluster(clt)
+#For reference, confint gives confidence intervals for each datapoint
+param_ci = confint(bt) #fast method
+#To get CI for only fixed effects, align and aggregate bootstrap estimates
+pred_q = aggregate(pred ~ stimulus*type, #aggregate predictions by fixed effect
+                   FUN = quantile, #calculate as quantiles of bootstrap predictions
+                   data = with(bt, 
+                               data.frame(newdta, 
+                                          pred = c(t(t)) #convert from rows to columns and align 
+                               ) 
+                   ),
+                   probs = c(0,1) + c(1,-1)*0.05/2) #using alpha = 0.05, make two-tailed confidence intervals
+# find mean prediction across 
+mod_mean = aggregate(prd ~ stimulus*type, 
+                     data = cbind(newdta, prd), 
+                     FUN = mean)
+#merge together
+param_data = merge(merge(newdta, pred_q, all = TRUE), 
+                   mod_mean)
+#rename for plotting
+mod_pred = within(param_data,
+                  {
+                    mod_mean = prd
+                    CI_02.5 = pred[,'2.5%']
+                    CI_97.5 = pred[,'97.5%']
+                    rm(list = c('pred','prd'))
+                  }
+)
+
+# . Plot predictions ------------------------------------------------------
+
+#plot all data together
+with(dta,
+     {
+     plot(x = stimulus,
+          y = response_y,
+          bg = adjustcolor(col = c('orange2', 'darkblue')[ 1 + type %in% 'alpha'],
+                           alpha.f = 0.5), # 50% opacity
+          col = 'black',
+          pch = 21) # dots
+     }
+)
+#add model and shaded confidence intervals
+#stimulus type alpha
+with(subset(mod_pred, type %in% 'alpha'),
+     {
+       polygon(x = c(sort(stimulus), sort(stimulus,decreasing = TRUE)),
+               y = 
+                 c(lowerCI = CI_02.5[order(stimulus)],
+                   upperCI = CI_97.5[order(stimulus,decreasing = TRUE)]
+                 ),
+               col = adjustcolor(col = 'darkblue',
+                                 alpha.f = 0.2),
+               border = NA
+       )
+       lines(sort(stimulus),
+             mod_mean[order(stimulus)],#
+             col = 'darkblue',
+             lwd = 3
+       )
+     }
+)
+#stimulus type beta
+with(subset(mod_pred, type %in% 'beta'),
+     {
+       polygon(x = c(sort(stimulus), sort(stimulus,decreasing = TRUE)),
+               y = 
+                 c(lowerCI = CI_02.5[order(stimulus)],
+                   upperCI = CI_97.5[order(stimulus,decreasing = TRUE)]
+                 ),
+               col = adjustcolor(col = 'orange2',
+                                 alpha.f = 0.2),
+               border = NA
+       )
+       lines(sort(stimulus),
+             mod_mean[order(stimulus)],
+             col = 'orange2',
+             lwd = 3
+       )
+     }
+)
+
+legend(x = 'topleft',
+       legend = c('alpha', 'beta'),
+       col = c('darkblue', 'orange2'),
+       pch = 15)
+     
