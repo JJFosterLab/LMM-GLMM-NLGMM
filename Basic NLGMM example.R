@@ -1100,21 +1100,29 @@ round(
 ## median  percentile_2.5 percentile_97.5 
 ## 0.89           -0.11            2.02
 #but note that this 95%CI includes _zero_ ( -0.11 < 0 <2.02 )
-# with this particular dataset, we cannot be confident that there is an effect
-# of stimulus type on width
+# with this particular dataset, we cannot be confident that
+# there is an effect of stimulus type on width. For stimulus type beta, the
+# inflection point (pop_inflex: 2 + type_inflex: 2.5 = 4.5) is within half a width 
+# ( (3 + 3.5) /2 = 3.25: + 4.5 = 7.75) of the maximum stimulus value.
+# As a result, the top part of rise region is not observed, so there is not 
+# enough data in the relevant region to estimate this effect without 
+# considerable uncertainty.
+# For real data, we could use our estimates of these parameters to propose
+# stimulus levels to add to the dataset to be able to measure this effect.
+full_estimates = full_fix$Estimate
+names(full_estimates) = full_fix_rn
+round(
+  with(data.frame(rbind(full_estimates)), 
+       {
+         Inflex_Intercept + Inflex_typebeta + 
+           (exp(LogWidth_Intercept + LogWidth_typebeta)/2)
+       }
+       ),
+  digits = 2
+)
+## 9.04
+#stimulus intensity should go to 9 to observe 80% of maximum performance for type beta
 
-# 
-# plot(full_fit)
-# summary(full_fit)
-# 
-# cond_full = conditional_effects(x = full_fit)
-# plot(cond_full, points = TRUE, point_args =  list(col = gray(0.7, 0.5)) )
-# #
-# conditional_effects(x = full_fit, spaghetti = TRUE, ndraws = 2e3)
-# #
-# 
-# # On my computer this takes <60s, each chain running for <20 seconds
-# plot(null_fit)
 
 
 # Model comparison --------------------------------------------------------
@@ -1122,10 +1130,190 @@ round(
 #How robust is the model to changes in the data structure?
 #Would the model make good predictions refitted the model but dropped one datapoint, would it still give good predictions?
 # calculate the Leave-One-Out (LOO) cross validation metric for the model
-loo_short = loo(full_fit)
-loo_null = loo(null_fit)
+loo_full = loo(full_fit)#calculate for full model 
+loo_null = loo(null_fit)#calculate for null model
 
-loo_compare(loo_short,
+loo_compare(loo_full,
             loo_null)
+##         elpd_diff se_diff
+## full_fit    0.0       0.0 
+## null_fit -127.6      14.8 
+# Expected log predictive density (ELPD) is higher for the full fit than for the
+# null model, and the difference is larger than both the standard error of the
+# ELPD and the difference in the number of parameters.
 
 
+# Plot model predictions --------------------------------------------------
+
+# We can get a general idea of the shape of the fitted curve by looking at a
+# subsample (here only 200) of the draws for stimulus.
+plot(
+  conditional_effects(x = full_fit, 
+                      spaghetti = TRUE, 
+                      ndraws = 2e2,
+                      effects = 'stimulus')
+)
+
+# to predict all effects, we can use the 'posterior_epred' method
+#by default 100 predictions per continuous variable (but fewer for their interactions)
+system.time(
+  {
+    full_cond =brms::conditional_effects(full_fit, 
+                                         method = 'posterior_epred', # posterior epred not working
+                                         cores =  parallel::detectCores()-1,
+                                         effects = c('stimulus:type')
+                                        )
+  }
+)#takes <2 seconds
+
+pred_data = full_cond$`stimulus:type`
+#plot each stimulus type
+plot(
+  NULL,
+  xlab = 'Stimulus intensity',
+  ylab = 'Proportion correct',
+  xlim = range(stimulus) * c(0.7, 1.3),
+  ylim = c(0,1),
+)
+abline(h = c(0,1,base, 1- lapse), 
+       lty = c(1,1,3,3))
+for (aa in agg$animal)
+  with(subset(agg, animal == aa),
+       #find the subset of the data with this animal
+       {
+         #Run code using this data as an environment
+         points(
+           x = stimulus,
+           y = correct_incorrect,
+           col = c('blue', 'orange3')[1 + type %in% levels(type)[2]],
+           #colour for this animal
+           pch = c(20, 21)[1 + type %in% levels(type)[2]]
+           # a dot, filled or open
+         )
+       })
+
+#plot total prediction intervals
+with(subset(pred_data, type == 'beta'), 
+     {
+       polygon(x = c(sort(stimulus), rev(sort(stimulus))), 
+               y = c(lower__[order(stimulus)],
+                     rev(upper__[order(stimulus)])
+               ), 
+               col = adjustcolor('orange', alpha.f = 50/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data, type == 'alpha'), 
+     {
+       polygon(x = c(sort(stimulus), rev(sort(stimulus))), 
+               y = c(lower__[order(stimulus)],
+                     rev(upper__[order(stimulus)])
+               ), 
+               col = adjustcolor('darkblue', alpha.f = 50/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+#plot the median prediction lines
+with(subset(pred_data, type == 'alpha'), 
+     lines(x = sort(stimulus), y = estimate__[order(stimulus)], 
+           col = 'darkblue',
+           lwd = 5)
+)
+with(subset(pred_data, type == 'beta'), 
+     lines(x = sort(stimulus), y = estimate__[order(stimulus)], 
+           col = 'orange',
+           lwd = 5)
+)
+abline(v = full_fix[full_fix_rn %in% 'Inflex_Intercept', 'Estimate'] + 
+             c(0, full_fix[full_fix_rn %in% 'Inflex_typebeta', 'Estimate'] ),
+       col = c('darkblue', 'orange'),
+       lty = 3
+       )
+
+legend(x = 'bottomright',
+       legend = unique(agg$type),
+       col = c('blue', 'orange3'),
+       pch = c(20, 21))
+
+
+# Plot comparison with simulation parameters ------------------------------
+
+#plot each stimulus type
+plot(
+  NULL,
+  xlab = 'Stimulus intensity',
+  ylab = 'Proportion correct',
+  xlim = range(stimulus) * c(0.7, 1.3),
+  ylim = c(0,1),
+)
+abline(h = c(0,1,base, 1- lapse), 
+       lty = c(1,1,3,3))
+
+#plot total prediction intervals
+with(subset(pred_data, type == 'beta'), 
+     {
+       polygon(x = c(sort(stimulus), rev(sort(stimulus))), 
+               y = c(lower__[order(stimulus)],
+                     rev(upper__[order(stimulus)])
+               ), 
+               col = adjustcolor('orange', alpha.f = 50/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+with(subset(pred_data, type == 'alpha'), 
+     {
+       polygon(x = c(sort(stimulus), rev(sort(stimulus))), 
+               y = c(lower__[order(stimulus)],
+                     rev(upper__[order(stimulus)])
+               ), 
+               col = adjustcolor('darkblue', alpha.f = 50/256),
+               border = NA,
+               lwd = 0.1
+       )
+     }
+)
+#plot the median prediction lines
+with(subset(pred_data, type == 'alpha'), 
+     lines(x = sort(stimulus), y = estimate__[order(stimulus)], 
+           col = 'darkblue',
+           lwd = 5)
+)
+with(subset(pred_data, type == 'beta'), 
+     lines(x = sort(stimulus), y = estimate__[order(stimulus)], 
+           col = 'orange',
+           lwd = 5)
+)
+
+
+lines(x = xx,
+     y = base + (1 - lapse - base) * 
+       plogis(q = 
+                width_coef* (xx - pop_inflex) / pop_width
+       ),
+     col = 'blue',
+     lwd = 5, 
+     lty = 3
+)
+
+lines(x = xx,
+     y = base + (1 - lapse - base) * 
+       plogis(q = 
+                width_coef* (xx - (pop_inflex + type_inflex)) / (pop_width+type_width)
+       ),
+     col = 'orange3',
+     lwd = 5, 
+     lty = 3
+)
+
+
+abline(v = full_fix[full_fix_rn %in% 'Inflex_Intercept', 'Estimate'] + 
+         c(0, full_fix[full_fix_rn %in% 'Inflex_typebeta', 'Estimate'] ),
+       col = c('darkblue', 'orange'),
+       lty = 3
+)
