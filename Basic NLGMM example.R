@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2023 06 02
-#     MODIFIED:	James Foster              DATE: 2023 06 05
+#     MODIFIED:	James Foster              DATE: 2023 06 06
 #
 #  DESCRIPTION: Fit a nonlinear logistic mixed-effects model
 #               
@@ -54,7 +54,7 @@ replicates = 20#number of replicates of each condition
 
 #starting parameters
 width_alpha = 0.8 # proportion of the rise region that we will call the "width"
-width_coef = 2*log(2/(1-width_alpha)-1) # coeficient to rescale curve to width
+width_coef = 2*log(2/(1-width_alpha)-1) # coefficient to rescale curve to width
 inflex = 15 # inflection point of first process
 width = -10 # 80% width of rise region with negative slope (x*-1)
 lapse = 0.12 # rate of incorrect ("lapses") at maximum performance
@@ -68,17 +68,18 @@ type_inflex = 2.50# effect of stimulus type 2 on average response
 type_width = 3.5# effect of type 2 on response to stimulus intensity
 type_animal_sd = 0.55 # sd of effect of animal on effect of type 2
 lapse_animal_sd = 0.50 # sd of lapse rates for different animals on log(odds) scale
-extra_error_sd = 0.10#small source of unnaccounted error
+extra_error_sd = 0.10#small source of unaccounted error
 
 #Plot ideal curve for stimulus type 1
-xx = seq(from = 1,
-         to  = n_levels,
+xx = seq(from = 0,
+         to  = n_levels-1,
          length.out = 1e3)
 plot(x = xx,
     y = base + (1 - lapse - base) * 
               plogis(q = 
                 width_coef* (xx - pop_inflex) / pop_width
                 ),
+    xlim = c(0,n_levels-1),
     ylim = c(0,1),
     type = 'l',
     col = 'blue',
@@ -245,12 +246,12 @@ agg = aggregate(correct_incorrect~
 #inspect the aggregate values
 head(agg)
 ## stimulus  type animal correct_incorrect
-## 1        0 alpha      A              0.00
-## 2        1 alpha      A              0.00
-## 3        2 alpha      A              0.00
-## 4        3 alpha      A              0.35
-## 5        4 alpha      A              1.00
-## 6        5 alpha      A              1.00
+#1        0 alpha      A              0.50
+#2        1 alpha      A              0.70
+#3        2 alpha      A              0.85
+#4        3 alpha      A              0.60
+#5        4 alpha      A              0.70
+#6        5 alpha      A              0.75
 
 # open an empty plot
 plot(
@@ -260,7 +261,8 @@ plot(
   xlim = range(stimulus) * c(0.7, 1.3),
   ylim = c(0,1),
 )
-abline(h = c(0,1))
+abline(h = c(0,1,base, 1- lapse), 
+       lty = c(1,1,3,3))
 for (aa in agg$animal)
   with(subset(agg, animal == aa),
        #find the subset of the data with this animal
@@ -316,7 +318,8 @@ install_cmdstan(cores = parallel::detectCores()-1, overwrite = FALSE)# may take 
 #if this fails, try https://github.com/stan-dev/cmdstan/archive/refs/tags/v2.30.1.zip
 
 #install package for writing Bayesian models
-install.packages('brms')
+if(!any(installed.packages() %in% 'brms'))
+{install.packages('brms')}
 
 #test cmdstanr
 cmdstanr::check_cmdstan_toolchain()
@@ -344,7 +347,7 @@ formula_nl = bf(
   #set up a formula for the curve as a whole,
   #including parameters found in the data (correct_incorrect, stimulus)
   #and parameters that we wish to estimate (baseline, lapse rate, inflection point, width).
-  #Most of these are subject to futher fixed (type) and random (animal) effects,
+  #Most of these are subject to further fixed (type) and random (animal) effects,
   #these need to be defined for each parameter.
   
   #Two parameters need special transformations
@@ -355,10 +358,16 @@ formula_nl = bf(
   formula = correct_incorrect ~ 
     Base + (1 - inv_logit(LogitLapse) - Base) *#curve region
     inv_logit( 4.39*(stimulus - Inflex) / exp(LogWidth) ) , #inflection-width curve
-  Base ~ 1, #Base rate of correct choices
-  LogitLapse ~ 1 + type + (1|animal), #Lapse rate on a log(odds) scale
-  LogWidth ~ 1 + type + (1|animal), #log 80% width of the curve
-  Inflex ~ 1 + type + (1|animal), #inflection point of the initial curve
+  # for each of these parameters, we can set up a separate formula 
+  # that describes how to predict them from the data 
+  #Base rate of correct choices: "
+  Base ~ 1, #Base rate of correct choices: "~ 1" gives the instruction "estimate the mean across all data"
+  #Lapse rate on a log(odds) scale:
+  LogitLapse ~ type + (1 + type|animal), #this is similar to the formula in our LMM example
+  #inflection point of the initial curve:
+  Inflex ~ type + (1 + type|animal), #N.B. this is similar to the intercept, so it does not include effects of stimulus level
+  #log 80% width of the curve:
+  LogWidth ~ type + (1 + type|animal), #N.B. this is similar to the slope, so all of its effects depend on stimulus level
   family = bernoulli("identity"),
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
@@ -380,7 +389,7 @@ formulaNull_nl = bf(
     inv_logit( LogitMean ) , #inflection-width curve
   Base ~ 1, #Base rate of correct choices
   LogitLapse ~ 1 + (1|animal), #Lapse rate on a log(odds) scale
-  LogitMean ~ 1 + (1|animal), #mean log(odds) of a correct choice
+  LogitMean ~ 1 + (1|animal), #mean log(odds) of a correct choice (intercept of an LMM)
   family = bernoulli("identity"),
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
@@ -403,9 +412,16 @@ formulaNull_nl = bf(
 # is a very wide student t distribution: (3 degrees of freedom, centre 0, st. dev. 2.5):
 # the differences in parameter values can vary by any amount, 
 # but small variations are more plausible.
+
+# Because we have random effects of animal on both Intercept and stimulus type
+# brms adds a correlation parameter, with a Lewandowski-Kurowicka-Joe distributed 
+# prior, for potential correlation between these two effects within each animal. 
+
 prior_nl = get_prior(formula = formula_nl,
                      data = dta)
 ##  prior                  class  coef  group resp dpar      nlpar lb ub       source
+## lkj(1)                  cor                                                  default
+## lkj(1)                  cor           animal                            (vectorized)
 ## (flat)                    b                                  Base            default
 ## (flat)                    b Intercept                        Base       (vectorized)
 ## (flat)                    b                                Inflex            default
@@ -436,73 +452,211 @@ prior_nl = get_prior(formula = formula_nl,
 
 
 # . . Base rate prior -----------------------------------------------------
-#for the baseline, we will use a beta distribution with a strong bias towards 0.5
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Base' &
-                coef %in% 'Intercept' 
-                }), "prior"] = 'beta(20,20)' #a beta distribution centred on 0.5
-#this prior is atuomatically bounded between 0 and 1, 
+#for the baseline, we will use a beta distribution with a bias towards 0.5
+
+#inspect the prior distribution
+#beta(20,20) has 95% probability of values between 0.35 and 0.65
+round(qbeta(p = c(0,1) + #lower & upper
+              (c(1,-1)/2) * #add and subtract half the interval
+              (1 - 0.95), #proportion of probability density outside interval
+            shape1 = 20, 
+            shape2 = 20),
+      digits = 2)
+xseq = seq(from  = 0, to = 1, by  = 0.01)
+plot(x = xseq, 
+     y = dbeta(x = xseq,
+               shape1 = 20, 
+               shape2 = 20), 
+     ylab = 'probability density',
+     xlab = 'expected value: baseline rate',
+     type = 'l', 
+     col = 4)
+abline(v = c(0.5,
+             qbeta(p = c(0,1) + #lower & upper
+                     (c(1,-1)/2) * #add and subtract half the interval
+                     (1 - 0.95), #proportion of probability density outside interval
+                   shape1 = 20, 
+                   shape2 = 20)),
+       lty = c(1,3,3)
+       )
+
+#set the prior distribution
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Base' &
+                      coef %in% 'Intercept' 
+                      ] = 'beta(20,20)' #a beta distribution centred on 0.5
+              })
+#this prior is automatically bounded between 0 and 1, 
 # but we may want to set additional upper and lower bounds 
 #lower bound
-prior_nl[with(prior_nl, 
-              { #class %in% 'b' & #just the fixed effects
+prior_nl = within(prior_nl, 
+              { lb[
                 nlpar %in% 'Base' #&
-                # coef %in% 'Intercept' 
-                }), "lb"] = 0 #baseline should not be less than 0
+                ] = 0 #baseline should not be less than 0
+              })
 #upper bound
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
+prior_nl = within(prior_nl, 
+              { ub[
+                class %in% 'b' & #just the fixed effects
                 nlpar %in% 'Base' #&
-                # coef %in% 'Intercept' 
-                }), "ub"] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
-
+                ] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
+              })
 # . . Lapse rate priors ---------------------------------------------------
 #for the lapse rates, we will use a normal distribution with a strong bias 
 # towards log(odds) = -3, prob ≈0.05
 # (see qlogis(0.05) for conversion from prob to log odds)
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'LogitLapse' &
-                  coef %in% 'Intercept' 
-              }), "prior"] = 'normal(-3,3)' #a normal distribution centred on -3
+# this expectation is still very broad, 95% probability between 0.0001 and 0.9468
+round(plogis(qnorm(p = c(0,1) + #lower & upper
+              (c(1,-1)/2) * #add and subtract half the interval
+              (1 - 0.95), #proportion of probability density outside interval
+            mean = -3, 
+            sd = 3)
+            ),
+      digits = 4)
+xseq = seq(from  = 0, to = 1, by  = 0.01)
+plot(x = xseq, 
+     y = dnorm(x = qlogis(xseq),
+               mean = -3, 
+               sd = 3), 
+     ylab = 'probability density',
+     xlab = 'expected value: lapse rate',
+     type = 'l', 
+     col = 4)
+abline(v = c(0.05,
+             plogis(
+               qnorm(p = c(0,1) + #lower & upper
+                       (c(1,-1)/2) * #add and subtract half the interval
+                       (1 - 0.95), #proportion of probability density outside interval
+                     mean = -3, 
+                     sd = 3)
+               )
+             ),
+       lty = c(1,3,3)
+)
+
+# set the prior distribution
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'Intercept' 
+                      ] = 'normal(-3,3)' #a normal distribution centred on -3
+              })
+
 #for all other fixed effects on lapse rate, we'll suggest values around 0 (no effect)
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'LogitLapse' &
-                  coef %in% 'typebeta' 
-              }), "prior"] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'typebeta' 
+                      ] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+              })
 
 # . . Inflection point priors ---------------------------------------------
 #for the population level inflection point, we expect it to be somewhere
 #in the middle of our stimulus range (0-6) = 3
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Inflex' &
-                coef %in% 'Intercept'
-                }), "prior"] = 'normal(3,3)' #a normal distribution:mean 3, sd 3
+# this expectation is broad, 95% probability of inflection points between -2.88 and 8.88
+round(qnorm(p = c(0,1) + #lower & upper
+                     (c(1,-1)/2) * #add and subtract half the interval
+                     (1 - 0.95), #proportion of probability density outside interval
+                   mean = 3, 
+                   sd = 3),
+digits = 2)
+
+#inspect the prior distribution
+xseq = seq(from  = -5, to = 10, by  = 0.01)
+plot(x = xseq, 
+     y = dnorm(x = xseq,
+               mean = 3, 
+               sd = 3), 
+     ylab = 'probability density',
+     xlab = 'expected value: inflection point',
+     type = 'l', 
+     col = 4)
+abline(v = c(3,
+             qnorm(p = c(0,1) + #lower & upper
+                       (c(1,-1)/2) * #add and subtract half the interval
+                       (1 - 0.95), #proportion of probability density outside interval
+                     mean = 3, 
+                     sd = 3)
+            ),
+        lty = c(1,3,3)
+)
+
+#set the priors
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Inflex' &
+                      coef %in% 'Intercept'
+                      ] = 'normal(3,3)' #a normal distribution:mean 3, sd 3
+              })
 #for all coefficients, we'll suggest values around 0 (no effect)
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Inflex' &
-                coef %in% 'typebeta' 
-                }), "prior"] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Inflex' &
+                      coef %in% 'typebeta' 
+                      ] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+              })
 
 # . . Rise region width priors --------------------------------------------
 #for the population level width, we expect it to be a positive value (>exp(-Inf))
 #somewhat smaller than the range of stimulus values
 #it might be reasonable to also expect an 80% rise region of around 3 ≈ exp(1)
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                nlpar %in% 'LogWidth' &
-                coef %in% 'Intercept' 
-                }), "prior"] = 'normal(1,3)' #a normal distribution:mean 3, sd 3
+#this expectation is broad, 95% probability of widths between 0.01 and 972.52
+#but with the strong assumption the curves are either positive (increase with stimulus level)
+#or nearly flat (requiring many times the range of available stimuli to rise).
+#This would not be the case in experiments where correct response rates _decrease_ 
+#as a function of increasing stimulus (estimate Width instead of LogWidth).
+round(exp(qnorm(p = c(0,1) + #lower & upper
+              (c(1,-1)/2) * #add and subtract half the interval
+              (1 - 0.95), #proportion of probability density outside interval
+            mean = 1, 
+            sd = 3)
+          ),
+      digits = 2)
+
+#inspect the prior distribution
+xseq = seq(from  = 0.001, to = 7, by  = 0.01)
+plot(x = xseq, 
+     y = dnorm(x = log(xseq),
+               mean = 1, 
+               sd = 3), 
+     ylab = 'probability density',
+     xlab = 'expected value: rise region width',
+     type = 'l', 
+     col = 4)
+abline(v = c(3,
+             exp(
+               qnorm(p = c(0,1) + #lower & upper
+                       (c(1,-1)/2) * #add and subtract half the interval
+                       (1 - 0.95), #proportion of probability density outside interval
+                     mean = 3, 
+                     sd = 3)
+                 )
+            ),
+      lty = c(1,3,3)
+)
+
+#set prior distribution
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogWidth' &
+                      coef %in% 'Intercept' 
+                      ] = 'normal(1,3)' #a normal distribution:mean 3, sd 3
+              })
 #for all coefficients, we'll suggest values around 0 (no effect)
-prior_nl[with(prior_nl, 
-              { class %in% 'b' & #just the fixed effects
-                nlpar %in% 'LogWidth' &
-                coef %in% 'typebeta'
-                }), "prior"] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+prior_nl = within(prior_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogWidth' &
+                      coef %in% 'typebeta'
+                      ] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+              })
 
 print(prior_nl)
 ## prior                class  coef  group resp dpar      nlpar lb ub  source
@@ -533,86 +687,188 @@ print(prior_nl)
 priorNull_nl = get_prior(formula = formulaNull_nl,
                          data = dta)
 # . . Base rate prior -----------------------------------------------------
-priorNull_nl[with(priorNull_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'Base' &
-                  coef %in% 'Intercept' 
-              }), "prior"] = 'beta(20,20)' #a beta distribution centred on 0.5
-#this prior is atuomatically bounded between 0 and 1, 
+priorNull_nl = within(priorNull_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'Base' &
+                      coef %in% 'Intercept' 
+                      ] = with(prior_nl, #use the same prior as the full model
+                                 {
+                                   prior[
+                                          class %in% 'b' & #just the fixed effects
+                                          nlpar %in% 'Base' &
+                                          coef %in% 'Intercept' 
+                                        ]
+                                 }
+                                ) 
+              })
+
+#this prior is automatically bounded between 0 and 1, 
 # but we may want to set additional upper and lower bounds 
 #lower bound
-priorNull_nl[with(priorNull_nl, 
-              { #class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Base' #&
-                # coef %in% 'Intercept' 
-              }), "lb"] = 0 #baseline should not be less than 0
+priorNull_nl = within(priorNull_nl, 
+              { lb[
+                  nlpar %in% 'Base' #
+                  ] = with(prior_nl, #use the same prior as the full model
+                           {
+                             lb[
+                               nlpar %in% 'Base' #
+                               ] 
+                           }
+                           )
+              })
 #upper bound
-priorNull_nl[with(priorNull_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'Base' #&
-                # coef %in% 'Intercept' 
-              }), "ub"] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
+priorNull_nl = within(priorNull_nl, 
+              {ub[
+                nlpar %in% 'Base' #
+              ] = with(prior_nl, #use the same prior as the full model
+                       {
+                         ub[
+                           nlpar %in% 'Base' #
+                         ] 
+                       }
+              )
+              })
 
 # . . Lapse rate priors ---------------------------------------------------
-#for the lapse rates, we will use a normal distribution with a strong bias 
-# towards log(odds) = -3, prob ≈0.05
-# (see qlogis(0.05) for conversion from prob to log odds)
-priorNull_nl[with(priorNull_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'LogitLapse' &
-                  coef %in% 'Intercept' 
-              }), "prior"] = 'normal(-3,3)' #a normal distribution centred on -3
+priorNull_nl = within(priorNull_nl,
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'Intercept' 
+                      ] = with(prior_nl, #use the same prior as the full model
+                               {
+                                 prior[
+                                       class %in% 'b' & #just the fixed effects
+                                       nlpar %in% 'LogitLapse' &
+                                       coef %in% 'Intercept' 
+                                       ]
+                               }
+                               )
+              })
 #for all other fixed effects on lapse rate, we'll suggest values around 0 (no effect)
-priorNull_nl[with(priorNull_nl, 
-              { class %in% 'b' & #just the fixed effects
-                  nlpar %in% 'LogitLapse' &
-                  coef %in% 'typebeta' 
-              }), "prior"] = 'normal(0,3)' #a normal distribution:mean 0, sd 3
+priorNull_nl = within(priorNull_nl, 
+              { prior[
+                      class %in% 'b' & #just the fixed effects
+                      nlpar %in% 'LogitLapse' &
+                      coef %in% 'typebeta' 
+                      ] = with(prior_nl, #use the same prior as the full model
+                               {
+                                 prior[
+                                     class %in% 'b' & #just the fixed effects
+                                     nlpar %in% 'LogitLapse' &
+                                     coef %in% 'typebeta' 
+                                 ] 
+                               }
+                               )
+              })
 
 # . . Mean rate priors ---------------------------------------------------
 #for the mean rates, we will use a normal distribution with a weak bias 
 # towards log(odds) = 0, prob  = 0.5
 # (see qlogis(0.5) for conversion from prob to log odds)
-priorNull_nl[with(priorNull_nl, 
-                  { class %in% 'b' & #just the fixed effects
-                      nlpar %in% 'LogitMean' &
-                      coef %in% 'Intercept' 
-                  }), "prior"] = 'normal(0,3)' #a normal distribution centred on 0
+
+# this expectation is very broad, 95% probability between 0.0028 and 0.9972
+round(plogis(qnorm(p = c(0,1) + #lower & upper
+                     (c(1,-1)/2) * #add and subtract half the interval
+                     (1 - 0.95), #proportion of probability density outside interval
+                   mean = 0, 
+                   sd = 3)
+),
+digits = 4)
+xseq = seq(from  = 0, to = 1, by  = 0.01)
+
+#inspect prior distribution
+plot(x = xseq, 
+     y = dnorm(x = qlogis(xseq),
+               mean = 0, 
+               sd = 3), 
+     ylab = 'probability density',
+     xlab = 'expected value: mean rate',
+     type = 'l', 
+     col = 4)
+abline(v = c(0.5,
+             plogis(
+               qnorm(p = c(0,1) + #lower & upper
+                       (c(1,-1)/2) * #add and subtract half the interval
+                       (1 - 0.95), #proportion of probability density outside interval
+                     mean = 0, 
+                     sd = 3)
+             )
+),
+lty = c(1,3,3)
+)
+
+#set prior distribution
+priorNull_nl = within(priorNull_nl, 
+                  { prior[
+                          class %in% 'b' & #just the fixed effects
+                          nlpar %in% 'LogitMean' &
+                          coef %in% 'Intercept' 
+                         ] = 'normal(0,3)' #a normal distribution centred on 0
+                  })
+
+print(priorNull_nl)# should look like the priors for the full model, but without fixed effects "stimulus" and "type"
+## prior                  class      coef  group resp dpar      nlpar lb   ub       source
+## (flat)                    b                                  Base  0 0.75      default
+## beta(20,20)               b Intercept                        Base  0 0.75      default
+## (flat)                    b                            LogitLapse              default
+## normal(-3,3)              b Intercept                  LogitLapse              default
+## student_t(3, 0, 2.5)     sd                            LogitLapse  0           default
+## student_t(3, 0, 2.5)     sd           animal           LogitLapse  0      (vectorized)
+## student_t(3, 0, 2.5)     sd Intercept animal           LogitLapse  0      (vectorized)
+## (flat)                    b                             LogitMean              default
+## normal(0,3)               b Intercept                   LogitMean              default
+## student_t(3, 0, 2.5)     sd                             LogitMean  0           default
+## student_t(3, 0, 2.5)     sd           animal            LogitMean  0      (vectorized)
+## student_t(3, 0, 2.5)     sd Intercept animal            LogitMean  0      (vectorized)
 
 
 # Fit model ---------------------------------------------------------------
-#double check that the model is viable by first setting up a short dummy run
-# Short run
+#!be prepared to wait!
+#The Markov Chain Monte-Carlo method used for Bayesian estimation requires
+#a long series of iterations, between which the algorithm attempts to improve the fit.
+#This process takes longer the more iterations, parameters and data are used.
+
+# . Short dummy run to check the influence of the priors ------------------
+
+
+#double check that the prior distribution is viable by first setting up a short dummy run
+# Dummy run
 system.time(
   {
     dummy_fit = brm( formula = formula_nl, # using our nonlinear formula
                      data = dta, # our data
                      prior = prior_nl, # our priors 
                      sample_prior = 'only', #ignore the data to check the influence of the priors
-                     iter = 500, # short run for 500 iterations
+                     iter = 300, # short run for 300 iterations
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
-# On my computer this takes <30s, each chain running for <1 second
+# On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
 
 #the default plot shows the values estimated for each parameter
 # in each chain for each iteration
-plot(dummy_fit)
-# This will need at least
-# 2 plot windows
+#fixed effects
+plot(dummy_fit, 
+     N = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+#random effects
+plot(dummy_fit, 
+     N = 10,
+     variable = "^sd", 
+     regex = TRUE )
 
 # We can see that for this formula with the priors we've set 
 # most parameters would eventually arrive at a value of zero.
 # Because we didn't add any information from the data we
 # see only the values the priors expect.
 
-dummy_cond = conditional_effects(x = dummy_fit)
-plot(dummy_cond, ask = FALSE)
-# This will need at least
-# 2 plot windows
 
 # As a sanity test, we can see that the priors alone
 # are not biasing estimates away from the range of 
@@ -621,10 +877,35 @@ plot(dummy_cond, ask = FALSE)
 # that proportion correct increases as a function of the stimulus
 # but it is still possible to observe wide range of correct choice rates
 # for all stimulus levels.
+#as we intended, the combined prior distribution allows for a range of curve shapes
+plot(
+  conditional_effects(x = dummy_fit, 
+                     spaghetti = TRUE, 
+                     ndraws = 2e2,
+                     effects = 'stimulus')
+)
+
+#and effects of stimulus type (mean correct choice rates just slightly above baseline)
+plot(
+  conditional_effects(x = dummy_fit, 
+                      effects = 'type')
+)
 # For stimulus types, there is no expected difference, though the expected range
 # is wider for beta since its coefficient is added to whatever alpha is.
 # Generally, the priors accept most plausible models.
 
+# N.B. We specified " sample_prior = 'only' " for this fit. We therefore see
+# _only_ the effects of our prior expectations on the fitted model, but _no_
+# influence from the data. These estimates should fit with our expectations,
+# but should not limit the range of possible interpretations of the data by
+# limiting the range of possible estimates to a narrow set of predictions.
+# See: github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations for more details.
+
+# . To check that estimation works  ---------------------------------------
+# Run the model for a small number of iterations to check that it is possible to 
+# estimate all parameters. This may be the point where we encounter numerical errors
+# if the formula or priors are misspecified.
+# e.g. if the formula returns estimates of correct choice rate outside of [0,1].
 
 # Short run
 system.time(
@@ -632,15 +913,32 @@ system.time(
     short_fit = brm( formula = formula_nl, # using our nonlinear formula
                      data = dta, # our data
                      prior = prior_nl, # our priors 
-                     iter = 500, # short run for 500 iterations
+                     iter = 300, # short run for 300 iterations (less than 300 gives insufficient warmup time)
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
-# On my computer this takes <60s, each chain running for <2 seconds
-plot(short_fit)
+# On my computer this takes <3 minutes, each chain running for <90 seconds
+#!Pay attention to any warning messages! A fix may be just one web search away.
+
+#inspect
+#fixed effects
+plot(short_fit, 
+     N = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+#random effects
+plot(short_fit, 
+     N = 10,
+     variable = "^sd", 
+     regex = TRUE )
+
+
+# . Full runs -------------------------------------------------------------
+
 
 # Full run
 system.time(
@@ -648,22 +946,14 @@ system.time(
     full_fit = brm( formula = formula_nl, # using our nonlinear formula
                      data = dta, # our data
                      prior = prior_nl, # our priors 
-                     iter = 2000, # long run for 2000 iterations
+                     iter = 1000, # long run for 1000 iterations
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
-# On my computer this takes <8 min, each chain running for <3 minutes
-plot(full_fit)
-summary(full_fit)
-
-cond_full = conditional_effects(x = full_fit)
-plot(cond_full, points = TRUE, point_args =  list(col = gray(0.7, 0.5)) )
-#
-conditional_effects(x = full_fit, spaghetti = TRUE, ndraws = 2e3)
-#
+# On my computer this takes <8 min, each chain running for 4-6 minutes
 
 # null model
 system.time(
@@ -671,15 +961,160 @@ system.time(
     null_fit = brm( formula = formulaNull_nl, # using our nonlinear formula
                      data = dta, # our data
                      prior = priorNull_nl, # our priors 
-                     iter = 500, # short run for 500 iterations
+                    iter = 1000, # long run for 1000 iterations
                      chains = 4, # 4 chains in parallel
                      cores = 4, # on 4 CPUs
                      refresh = 0, # don't echo chain progress
                      backend = 'cmdstanr') # use cmdstanr (other compilers broken)
   }
 )
-# On my computer this takes <60s, each chain running for <20 seconds
-plot(null_fit)
+# On my computer this takes <2 min, each chain running for 50-80 seconds
+
+
+# . . Inspect the fits ----------------------------------------------------
+#fixed effects
+plot(full_fit, 
+     N = 10,
+     variable = "^b_", 
+     regex = TRUE)
+
+#random effects
+plot(full_fit, 
+     N = 10,
+     variable = "^sd", 
+     regex = TRUE )
+
+#summary of parameter estimates
+full_sm = summary(full_fit,
+                  robust = TRUE)#use the median estimate
+#"r_hat" values tell us how well the 4 chains arrived at stable, overlapping estimates
+#for each parameter. Values should be close to 1.00, and not >1.10.
+# 
+## Group-Level Effects: 
+##   ~animal (Number of levels: 10) 
+##                                                 Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sd(LogitLapse_Intercept)                          0.88      0.47     0.09     2.44 1.01      469      372
+## sd(LogitLapse_typebeta)                           1.02      0.97     0.05     4.30 1.00     1255      848
+## sd(Inflex_Intercept)                              1.49      0.41     0.88     2.65 1.00      815     1052
+## sd(Inflex_typebeta)                               0.72      0.45     0.05     1.88 1.01      550      471
+## sd(LogWidth_Intercept)                            0.53      0.37     0.04     1.50 1.02      255      630
+## sd(LogWidth_typebeta)                             0.71      0.53     0.05     1.93 1.01      261      749
+## cor(LogitLapse_Intercept,LogitLapse_typebeta)    -0.11      0.76    -0.96     0.93 1.00     2900     1362
+## cor(Inflex_Intercept,Inflex_typebeta)            -0.72      0.31    -0.99     0.63 1.01     1272     1149
+## cor(LogWidth_Intercept,LogWidth_typebeta)        -0.81      0.24    -1.00     0.84 1.01      356      791
+## 
+## Population-Level Effects: 
+##                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## Base_Intercept           0.48      0.03     0.39     0.53 1.00      582      888
+## LogitLapse_Intercept    -2.68      0.67    -5.63    -1.76 1.01      362      558
+## LogitLapse_typebeta     -2.23      2.10    -7.18     0.81 1.00     1434      934
+## Inflex_Intercept         2.60      0.58     1.43     3.83 1.02      467      608
+## Inflex_typebeta          2.54      0.55     1.38     3.57 1.01      718      986
+## LogWidth_Intercept       1.18      0.55     0.05     2.16 1.01      300      773
+## LogWidth_typebeta        0.89      0.51    -0.11     2.02 1.01      419      917
+
+#Estimate is the median of all post-warmup estimates (draws) from all chains.
+#The values "l-95% CI" and "u-95% CI" are the edges of the 95% "credible interval"
+#the interval containing 95% of post-warmup estimates, and therefore the most plausible values.
+
+# . . Check parameter estimates -----------------------------------------------
+
+#We can also check if these estimates match with our expectations.
+#Extract fixed effects estimates
+full_fix = full_sm$fixed
+#extract rownames
+full_fix_rn = rownames(full_fix)
+#The estimate for baseline is very similar to our input value of 0.5
+round(
+  with(full_fix[full_fix_rn %in% 'Base_Intercept', ],
+     {c(median = Estimate,
+         percentile_2.5 = `l-95% CI`,
+          percentile_97.5 = `u-95% CI`)
+  }),digits = 2)
+##median  percentile_2.5 percentile_97.5 
+## 0.48            0.39            0.53
+# the model has searched at lower values of baseline than we might reasonably expect
+# unless animals have a strong bias to incorrect responses
+# we might get more accurate estimates using a more restictive prior (e.g. beta(250, 250))
+
+#The estimate for lapse rate (logit scale) is a little lower than our input value of 0.12
+round(
+plogis(q = 
+         with(full_fix[full_fix_rn %in% 'LogitLapse_Intercept', ],
+     {c(median = Estimate,
+         percentile_2.5 = `l-95% CI`,
+          percentile_97.5 = `u-95% CI`)
+  })
+),digits = 2)
+## median  percentile_2.5 percentile_97.5 
+## 0.06            0.00            0.15
+# in our dataset many animals scored 100% for some conditions by chance 
+# if we performed more trials with each animal, we might obtain a more accurate
+# estimate of lapse rate
+
+#The estimate for width (log scale) is close to our input value of 3.00
+round(
+exp(x =  
+         with(full_fix[full_fix_rn %in% 'LogWidth_Intercept', ],
+     {c(median = Estimate,
+         percentile_2.5 = `l-95% CI`,
+          percentile_97.5 = `u-95% CI`)
+  })
+),digits = 2)
+## median  percentile_2.5 percentile_97.5 
+## 3.26            1.05            8.63 
+
+#The estimate for inflection point is close to our input value of 2.00
+round( 
+     with(full_fix[full_fix_rn %in% 'Inflex_Intercept', ],
+     {c(median = Estimate,
+         percentile_2.5 = `l-95% CI`,
+          percentile_97.5 = `u-95% CI`)
+      }),
+     digits = 2)
+## median  percentile_2.5 percentile_97.5 
+## 2.60            1.43            3.83  
+
+#importantly, the estimates of the effect of stimulus type are also accurate
+#The estimate for effect of type on inflection point is close to our input value of 2.50
+round( 
+  with(full_fix[full_fix_rn %in% 'Inflex_typebeta', ],
+       {c(median = Estimate,
+          percentile_2.5 = `l-95% CI`,
+          percentile_97.5 = `u-95% CI`)
+       }),
+  digits = 2)
+## median  percentile_2.5 percentile_97.5 
+## 2.54            1.38            3.57 
+
+#The estimate for effect of stimulus width (log scale) is not far from our 
+# input value of 3.5, or on a log scale: log(3.5) = 1.25
+#but also includes a very wide range
+round(
+        with(full_fix[full_fix_rn %in% 'LogWidth_typebeta', ],
+             {c(median = Estimate,
+                percentile_2.5 = `l-95% CI`,
+                percentile_97.5 = `u-95% CI`)
+             }),
+  digits = 2)
+## median  percentile_2.5 percentile_97.5 
+## 0.89           -0.11            2.02
+#but note that this 95%CI includes _zero_ ( -0.11 < 0 <2.02 )
+# with this particular dataset, we cannot be confident that there is an effect
+# of stimulus type on width
+
+# 
+# plot(full_fit)
+# summary(full_fit)
+# 
+# cond_full = conditional_effects(x = full_fit)
+# plot(cond_full, points = TRUE, point_args =  list(col = gray(0.7, 0.5)) )
+# #
+# conditional_effects(x = full_fit, spaghetti = TRUE, ndraws = 2e3)
+# #
+# 
+# # On my computer this takes <60s, each chain running for <20 seconds
+# plot(null_fit)
 
 
 # Model comparison --------------------------------------------------------
@@ -687,7 +1122,7 @@ plot(null_fit)
 #How robust is the model to changes in the data structure?
 #Would the model make good predictions refitted the model but dropped one datapoint, would it still give good predictions?
 # calculate the Leave-One-Out (LOO) cross validation metric for the model
-loo_short = loo(short_fit)
+loo_short = loo(full_fit)
 loo_null = loo(null_fit)
 
 loo_compare(loo_short,
