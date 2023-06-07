@@ -1242,6 +1242,9 @@ legend(x = 'bottomright',
 
 # Plot comparison with simulation parameters ------------------------------
 
+
+# . Curve predictions -----------------------------------------------------
+
 #plot each stimulus type
 plot(
   NULL,
@@ -1312,8 +1315,55 @@ lines(x = xx,
 )
 
 
+# . Parameter predictions -------------------------------------------------
+#WORK IN PROGRESS
+full_draws = prepare_predictions(full_fit)
+full_pars = full_draws$nlpars
+
+#plot each stimulus type
+plot(
+  NULL,
+  xlab = 'Stimulus intensity',
+  ylab = 'Proportion correct',
+  xlim = range(stimulus) * c(0.7, 1.3),
+  ylim = c(0,1),
+)
+abline(h = c(0,1,base, 1- lapse), 
+       lty = c(1,1,3,3))
+
 abline(v = full_fix[full_fix_rn %in% 'Inflex_Intercept', 'Estimate'] + 
          c(0, full_fix[full_fix_rn %in% 'Inflex_typebeta', 'Estimate'] ),
        col = c('darkblue', 'orange'),
        lty = 3
 )
+with(full_fix[full_fix_rn %in% 'Inflex_Intercept',],
+     {
+arrows(x0 = `l-95% CI`,
+       x1 = `u-95% CI`,
+       y0 = (full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] + 
+         (1 - full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] -
+            - plogis(full_fix[full_fix_rn %in% 'LogitLapse_Intercept', 'Estimate']) )
+       )/2,
+       code = 3,
+       angle = 90,
+       length = 0.1,
+       col = c('darkblue'),
+       lwd = 3
+)
+})
+with(full_fix[full_fix_rn %in% 'Inflex_Intercept',],
+     {
+arrows(x0 = `l-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','l-95% CI'],
+       x1 = `u-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','u-95% CI'],
+       y0 = (full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] + 
+         (1 - full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] -
+            - plogis(full_fix[full_fix_rn %in% 'LogitLapse_Intercept', 'Estimate'] +
+                       full_fix[full_fix_rn %in% 'LogitLapse_typebeta', 'Estimate']) )
+       )/2,
+       code = 3,
+       angle = 90,
+       length = 0.1,
+       col = c('orange'),
+       lwd = 3
+)
+})
