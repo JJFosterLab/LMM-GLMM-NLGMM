@@ -15,5 +15,5 @@ For more info about fitting non-linear models with ```brms``` see  https://paul-
 For an applied example of an NLGMM see https://github.com/JohnKirwan/Olsson_colour_discrimination
 
 ## Work in progress!
-As of 17/06/2022 only the LMM script and GLMM scripts are complete.
-Nonlinear modelling script will be added in the future.
+As of 13/06/2023 the LMM, GLMM and NLGMM scripts are mostly complete.
+Markdowns of each script will be added in future versions.
