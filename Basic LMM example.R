@@ -395,7 +395,7 @@ summary(emm_slopes_interact)
 # . Extract predictions ---------------------------------------------------
 #check all relevant variables for predictions
 formula(mixmod.max)
-## lag ~ 1 + temperature + treatment + (1 + temperature | Animal.number)
+## response ~ stimulus * type + (1 + stimulus * type | animal)
 newdta = with(dta,
               expand.grid(stimulus = unique(stimulus),
                           type = unique(type),
