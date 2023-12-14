@@ -433,7 +433,7 @@ system.time({
   bt = bootMer(mixmod.max,
                FUN = pfun,
                nsim = 100,#100 takes ≈60 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
-               re.form = NULL,#NA for fixed effects, NULL to include random effects
+               re.form = NA,#NA for fixed effects, NULL to include random effects
                #fixed effects gives "confidence interval", population level effects
                #random effects gives "prediction interval", expected values for these individuals
                parallel = ifelse(test = Sys.info()[['sysname']] == 'Windows',
