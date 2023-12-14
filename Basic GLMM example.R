@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2021 06 27
-#     MODIFIED:	James Foster              DATE: 2023 06 01
+#     MODIFIED:	James Foster              DATE: 2023 12 14
 #
 #  DESCRIPTION: An example generalised mixed-effect model, using "glmer" from
 #               the "lme4" package.
@@ -419,7 +419,7 @@ message('starting large simulation\n',
 system.time({
   bt = bootMer(glmm.max,
                FUN = pfun,
-               nsim = 20,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
+               nsim = 100,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
                re.form = NA,#NA for fixed effects, NULL to include random effects
                #fixed effects gives "confidence interval", population level effects
                #random effects gives "prediction interval", expected values for these individuals

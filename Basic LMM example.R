@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2021 06 27
-#     MODIFIED:	James Foster              DATE: 2023 05 28
+#     MODIFIED:	James Foster              DATE: 2023 12 14
 #
 #  DESCRIPTION: An example mixed-effect model, using "lmer" from the "lme4" package.
 #
