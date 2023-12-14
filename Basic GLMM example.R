@@ -403,7 +403,9 @@ pfun = function(x)
 #Really benefits from some parallel processing
 avail.cores = parallel::detectCores() - 1
 clt = parallel::makeCluster(spec = avail.cores, 
-                            type="SOCK")
+                            type=if(Sys.info()[['sysname']] == 'Windows'){"SOCK" # 'sock' type on windows
+                            }else{"FORK"}#'fork' type on mac & linux
+                            )
 parallel::clusterExport(clt,
                         list('glmm.max',
                              'dta',
@@ -411,11 +413,16 @@ parallel::clusterExport(clt,
                         )
 )
 #this takes a long time to simulate
+message('starting large simulation\n',
+        'expect to wait at least 60s...\n'
+)
 system.time({
   bt = bootMer(glmm.max,
                FUN = pfun,
                nsim = 50,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
                re.form = NULL,#NA for fixed effects, NULL to include random effects
+               #fixed effects gives "confidence interval", population level effects
+               #random effects gives "prediction interval", expected values for these individuals
                parallel = ifelse(test = Sys.info()[['sysname']] == 'Windows',
                                  yes =  "snow",
                                  no =  "multicore"),
@@ -423,6 +430,7 @@ system.time({
                cl = clt #the parallel cluster prepared above
   )
 })
+message('simulation finished!')
 #now it has been used, close the cluster
 parallel::stopCluster(clt)
 #For reference, confint gives confidence intervals for each datapoint
