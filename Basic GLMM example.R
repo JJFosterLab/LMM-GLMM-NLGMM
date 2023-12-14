@@ -419,8 +419,8 @@ message('starting large simulation\n',
 system.time({
   bt = bootMer(glmm.max,
                FUN = pfun,
-               nsim = 50,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
-               re.form = NULL,#NA for fixed effects, NULL to include random effects
+               nsim = 20,#50 takes ≈180 seconds. Minimum of 20 to be able to calculate 95%CI. Increase number for greater detail.
+               re.form = NA,#NA for fixed effects, NULL to include random effects
                #fixed effects gives "confidence interval", population level effects
                #random effects gives "prediction interval", expected values for these individuals
                parallel = ifelse(test = Sys.info()[['sysname']] == 'Windows',
@@ -433,8 +433,6 @@ system.time({
 message('simulation finished!')
 #now it has been used, close the cluster
 parallel::stopCluster(clt)
-#For reference, confint gives confidence intervals for each datapoint
-param_ci = confint(bt) #fast method
 #To get CI for only fixed effects, align and aggregate bootstrap estimates
 pred_q = aggregate(pred ~ stimulus*type, #aggregate predictions by fixed effect
                    FUN = quantile, #calculate as quantiles of bootstrap predictions
