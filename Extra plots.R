@@ -24,6 +24,7 @@
 #
 #TODO
 #- Add comments +
+#- Comment MLE plots
 
 
 # Function for saving as PNG ----------------------------------------------
