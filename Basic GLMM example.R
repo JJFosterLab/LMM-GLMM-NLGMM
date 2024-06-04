@@ -374,7 +374,7 @@ summary(emm_slopes_interact)
 
 
 # Plot predictions --------------------------------------------------------
-
+if(Sys.info()[['sysname']] == 'Windows'){require('snow')} #On Windoes this requires the 'snow' package for simple parallel computing 
 # . Extract predictions ---------------------------------------------------
 #check all relevant variables for predictions
 formula(glmm.max)
