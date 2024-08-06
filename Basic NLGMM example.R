@@ -371,6 +371,9 @@ formula_nl = bf(
   family = bernoulli("identity"),
   nl = TRUE)#the joint distribution for these parameters is undefined, and therefore the parameters themselves are "nonlinear"
 
+# #N.B. for plotting we will need to also definte "inv_logit" in our the R environment
+inv_logit = inv_logit_scaled # this can be found in brms, but with an additional specifier
+
 #set up a null model
 formulaNull_nl = bf(
   #set up a formula for the curve as a whole,
@@ -493,14 +496,14 @@ prior_nl = within(prior_nl,
 #lower bound
 prior_nl = within(prior_nl, 
               { lb[
-                nlpar %in% 'Base' #&
+                nlpar %in% 'Base' & !(coef %in% 'Intercept') #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
                 ] = 0 #baseline should not be less than 0
               })
 #upper bound
 prior_nl = within(prior_nl, 
               { ub[
                 class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Base' #&
+                nlpar %in% 'Base' & !(coef %in% 'Intercept') #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
                 ] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
               })
 # . . Lapse rate priors ---------------------------------------------------
@@ -824,6 +827,7 @@ print(priorNull_nl)# should look like the priors for the full model, but without
 ## student_t(3, 0, 2.5)     sd Intercept animal            LogitMean  0      (vectorized)
 
 
+
 # Fit model ---------------------------------------------------------------
 #!be prepared to wait!
 #The Markov Chain Monte-Carlo method used for Bayesian estimation requires
@@ -850,17 +854,18 @@ system.time(
 )
 # On my computer this takes <60s, each chain running for <1 seconds (mainly compile time)
 
+
 #the default plot shows the values estimated for each parameter
 # in each chain for each iteration
 #fixed effects
 plot(dummy_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^b_", 
      regex = TRUE)
 
 #random effects
 plot(dummy_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^sd", 
      regex = TRUE )
 
@@ -878,6 +883,7 @@ plot(dummy_fit,
 # but it is still possible to observe wide range of correct choice rates
 # for all stimulus levels.
 #as we intended, the combined prior distribution allows for a range of curve shapes
+#N.B. the "inv_logit" function needs to be in your R environment (renamed to "inv_logit_scaled" in BRMS)
 plot(
   conditional_effects(x = dummy_fit, 
                      spaghetti = TRUE, 
@@ -926,13 +932,13 @@ system.time(
 #inspect
 #fixed effects
 plot(short_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^b_", 
      regex = TRUE)
 
 #random effects
 plot(short_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^sd", 
      regex = TRUE )
 
@@ -974,13 +980,13 @@ system.time(
 # . . Inspect the fits ----------------------------------------------------
 #fixed effects
 plot(full_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^b_", 
      regex = TRUE)
 
 #random effects
 plot(full_fit, 
-     N = 10,
+     nvariables = 10,
      variable = "^sd", 
      regex = TRUE )
 
