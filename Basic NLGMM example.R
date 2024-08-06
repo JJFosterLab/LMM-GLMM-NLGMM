@@ -1320,6 +1320,17 @@ lines(x = xx,
      lty = 3
 )
 
+legend(x = 'bottomright',
+       inset = 0.05,
+       legend = c('simulation parameters',
+                  'recovered parameters'),
+       col = c('black', 'black'),
+       lty = c(3, 1),
+       lwd = c(5, 5),
+       )
+#the model expects the two populations to be closer that simulated
+#with more data, the recovered parameters should approach the simulation
+#note that the simulation is within the model's credible interval
 
 # . Parameter predictions -------------------------------------------------
 #WORK IN PROGRESS
@@ -1373,3 +1384,4 @@ arrows(x0 = `l-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','l-95% CI']
        lwd = 3
 )
 })
+
