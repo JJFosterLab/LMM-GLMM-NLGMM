@@ -29,10 +29,11 @@
 # 
 #       USAGE:  
 #TODO   ---------------------------------------------
- # - Simulate data
- # - Fit model
- # - Choose priors
- # - Post-hoc interpretations
+ # - Simulate data  +
+ # - Fit model  +
+ # - Choose priors  +
+ # - Logit scaled baseline
+ # - Post-hoc interpretations 
  # - Simulate individual lapse rates
 
 
@@ -496,14 +497,14 @@ prior_nl = within(prior_nl,
 #lower bound
 prior_nl = within(prior_nl, 
               { lb[
-                nlpar %in% 'Base' & !(coef %in% 'Intercept') #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
+                nlpar %in% 'Base' & coef %in% '' #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
                 ] = 0 #baseline should not be less than 0
               })
 #upper bound
 prior_nl = within(prior_nl, 
               { ub[
                 class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Base' & !(coef %in% 'Intercept') #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
+                nlpar %in% 'Base' & coef %in% '' #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
                 ] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
               })
 # . . Lapse rate priors ---------------------------------------------------
@@ -715,7 +716,7 @@ priorNull_nl = within(priorNull_nl,
                   ] = with(prior_nl, #use the same prior as the full model
                            {
                              lb[
-                               nlpar %in% 'Base' #
+                               nlpar %in% 'Base' & coef %in% ''#
                                ] 
                            }
                            )
@@ -727,7 +728,7 @@ priorNull_nl = within(priorNull_nl,
               ] = with(prior_nl, #use the same prior as the full model
                        {
                          ub[
-                           nlpar %in% 'Base' #
+                           nlpar %in% 'Base' & coef %in% ''#
                          ] 
                        }
               )
@@ -1384,4 +1385,3 @@ arrows(x0 = `l-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','l-95% CI']
        lwd = 3
 )
 })
-
