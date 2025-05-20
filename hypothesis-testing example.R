@@ -75,7 +75,7 @@ tt = t.test(
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   # difference could be bigger or smaller
-  paired  = FALSE,
+  # paired  = FALSE,
   # there are no pairs of data
   var.equal = TRUE # Student's t-test assumes "equal variances" in the two groups
 )
@@ -140,7 +140,7 @@ tt_welch = t.test(
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   # difference could be bigger or smaller
-  paired  = FALSE,
+  # paired  = FALSE,
   # there are no pairs of data
   var.equal = FALSE # Welch's t-test does not assume "equal variances" in the two groups
 )
@@ -213,7 +213,7 @@ summary(dt_unknown)#inspect the summary statistics
 
 #calculate the mean and confidence interval for each condition
 mean_unknown = aggregate(
-  formula = value ~ condition,
+  value ~ condition,
   data = dt_unknown,
   FUN = function(x)
     # function for calculating 95% CI
@@ -240,7 +240,7 @@ tt_unknown = t.test(
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   # difference could be bigger or smaller
-  paired  = FALSE,
+  # paired  = FALSE,
   # there are no pairs of data
   var.equal = FALSE # Welch's t-test does not assume "equal variances" in the two groups
 )
@@ -262,13 +262,13 @@ print(tt_unknown)
 # any distribution.
 
 mww = wilcox.test(
-  formula = value ~ condition,
+  value ~ condition,
   #condition predicts value
   data = dt_unknown,
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   #A could be bigger or smaller
-  paired = FALSE #perform a rank sum test (paired would be signed-ranks)
+  # paired = FALSE #perform a rank sum test (paired would be signed-ranks)
 )
 #print the test result
 print(mww)
