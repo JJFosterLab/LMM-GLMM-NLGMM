@@ -32,8 +32,9 @@
  # - Simulate data  +
  # - Fit model  +
  # - Choose priors  +
- # - Logit scaled baseline
+ # - Logit scaled baseline  +
  # - Post-hoc interpretations 
+ # - Extract hypothesis tests 
  # - Simulate individual lapse rates
 
 
@@ -975,7 +976,7 @@ full_sm = summary(full_fit,
 ## 
 ## Population-Level Effects: 
 ##                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-## LogitBase_Intercept           0.48      0.03     0.39     0.53 1.00      582      888
+## LogitBase_Intercept     -0.12      0.15    -0.56     0.11 1.00      658      715
 ## LogitLapse_Intercept    -2.68      0.67    -5.63    -1.76 1.01      362      558
 ## LogitLapse_typebeta     -2.23      2.10    -7.18     0.81 1.00     1434      934
 ## Inflex_Intercept         2.60      0.58     1.43     3.83 1.02      467      608
@@ -1004,7 +1005,7 @@ plogis( q =
   })
   ),digits = 2)
 ##median  percentile_2.5 percentile_97.5 
-## 0.48            0.39            0.53
+## 0.47            0.36            0.53
 # the model has searched at lower values of baseline than we might reasonably expect
 # unless animals have a strong bias to incorrect responses
 # we might get more accurate estimates using a more restictive prior (e.g. beta(250, 250))
@@ -1350,3 +1351,4 @@ arrows(x0 = `l-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','l-95% CI']
        lwd = 3
 )
 })
+
