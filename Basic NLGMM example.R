@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2023 06 02
-#     MODIFIED:	James Foster              DATE: 2023 06 06
+#     MODIFIED:	James Foster              DATE: 2025 05 20
 #
 #  DESCRIPTION: Fit a nonlinear logistic mixed-effects model
 #               
@@ -8,7 +8,7 @@
 #               
 #      OUTPUTS: Test result
 #
-#	   CHANGES: - 
+#	   CHANGES: - Logit scaled baseline (baseline can no longer be bounded)
 #
 #   REFERENCES: Olsson P, Johnsson RD, Foster JJ, Kirwan JD, Lind O & Kelber A (2020)
 #               Chicken colour discrimination depends on background colour. 
@@ -357,12 +357,12 @@ formula_nl = bf(
   #To avoid curve widths of 0, we can assume a positive slope (≥0)
   #and add additional effects to width on a log scale (Width = exp(LogWidth))
   formula = correct_incorrect ~ 
-    Base + (1 - inv_logit(LogitLapse) - Base) *#curve region
+    inv_logit(LogitBase) + (1 - inv_logit(LogitLapse) - inv_logit(LogitBase) ) *#curve region
     inv_logit( 4.39*(stimulus - Inflex) / exp(LogWidth) ) , #inflection-width curve
   # for each of these parameters, we can set up a separate formula 
   # that describes how to predict them from the data 
   #Base rate of correct choices: "
-  Base ~ 1, #Base rate of correct choices: "~ 1" gives the instruction "estimate the mean across all data"
+  LogitBase ~ 1, #Base rate of correct choices: "~ 1" gives the instruction "estimate the mean across all data"
   #Lapse rate on a log(odds) scale:
   LogitLapse ~ type + (1 + type|animal), #this is similar to the formula in our LMM example
   #inflection point of the initial curve:
@@ -389,9 +389,9 @@ formulaNull_nl = bf(
   #To avoid curve widths of 0, we can assume a positive slope (≥0)
   #and add additional effects to width on a log scale (Width = exp(LogWidth))
   formula = correct_incorrect ~ 
-    Base + (1 - inv_logit(LogitLapse) - Base) *#curve region
+    inv_logit(LogitBase) + (1 - inv_logit(LogitLapse) - inv_logit(LogitBase) )*#curve region
     inv_logit( LogitMean ) , #inflection-width curve
-  Base ~ 1, #Base rate of correct choices
+  LogitBase ~ 1, #Base rate of correct choices
   LogitLapse ~ 1 + (1|animal), #Lapse rate on a log(odds) scale
   LogitMean ~ 1 + (1|animal), #mean log(odds) of a correct choice (intercept of an LMM)
   family = bernoulli("identity"),
@@ -426,8 +426,8 @@ prior_nl = get_prior(formula = formula_nl,
 ##  prior                  class  coef  group resp dpar      nlpar lb ub       source
 ## lkj(1)                  cor                                                  default
 ## lkj(1)                  cor           animal                            (vectorized)
-## (flat)                    b                                  Base            default
-## (flat)                    b Intercept                        Base       (vectorized)
+## (flat)                    b                                  LogitBase            default
+## (flat)                    b Intercept                        LogitBase       (vectorized)
 ## (flat)                    b                                Inflex            default
 ## (flat)                    b Intercept                      Inflex       (vectorized)
 ## (flat)                    b  typebeta                      Inflex       (vectorized)
@@ -456,31 +456,34 @@ prior_nl = get_prior(formula = formula_nl,
 
 
 # . . Base rate prior -----------------------------------------------------
-#for the baseline, we will use a beta distribution with a bias towards 0.5
+#for the baseline, we will use a logit-normal distribution with a bias towards 0.5
 
 #inspect the prior distribution
-#beta(20,20) has 95% probability of values between 0.35 and 0.65
-round(qbeta(p = c(0,1) + #lower & upper
-              (c(1,-1)/2) * #add and subtract half the interval
-              (1 - 0.95), #proportion of probability density outside interval
-            shape1 = 20, 
-            shape2 = 20),
-      digits = 2)
+#normal(0,1) on a logit scale has 95% probability of values between 0.12 and 0.88
+round(plogis(qnorm(p = c(0,1) + #lower & upper
+                     (c(1,-1)/2) * #add and subtract half the interval
+                     (1 - 0.95), #proportion of probability density outside interval
+                   mean = 0, 
+                   sd = 1)
+),
+digits = 4)
 xseq = seq(from  = 0, to = 1, by  = 0.01)
 plot(x = xseq, 
-     y = dbeta(x = xseq,
-               shape1 = 20, 
-               shape2 = 20), 
+     y = plogis(dnorm(x = qlogis(xseq),
+               mean = 0, 
+               sd = 1)), 
      ylab = 'probability density',
      xlab = 'expected value: baseline rate',
      type = 'l', 
      col = 4)
 abline(v = c(0.5,
-             qbeta(p = c(0,1) + #lower & upper
+             plogis(
+               qnorm(p = c(0,1) + #lower & upper
                      (c(1,-1)/2) * #add and subtract half the interval
                      (1 - 0.95), #proportion of probability density outside interval
-                   shape1 = 20, 
-                   shape2 = 20)),
+                   mean = 0, 
+                   sd = 1))
+             ),
        lty = c(1,3,3)
        )
 
@@ -488,25 +491,11 @@ abline(v = c(0.5,
 prior_nl = within(prior_nl, 
               { prior[
                       class %in% 'b' & #just the fixed effects
-                      nlpar %in% 'Base' &
+                      nlpar %in% 'LogitBase' &
                       coef %in% 'Intercept' 
-                      ] = 'beta(20,20)' #a beta distribution centred on 0.5
+                      ] = 'normal(0,1)' #a normal distribution centred on plogis(0) = 0.5
               })
 #this prior is automatically bounded between 0 and 1, 
-# but we may want to set additional upper and lower bounds 
-#lower bound
-prior_nl = within(prior_nl, 
-              { lb[
-                nlpar %in% 'Base' & coef %in% '' #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
-                ] = 0 #baseline should not be less than 0
-              })
-#upper bound
-prior_nl = within(prior_nl, 
-              { ub[
-                class %in% 'b' & #just the fixed effects
-                nlpar %in% 'Base' & coef %in% '' #"paul.buerkner Jul 2020:  Currently lb und ub can only be specified for a whole parameter class. I realise this is unnecessarily restricting and may change that in the future."
-                ] = 0.75 #if we expect lapse rates of 5-10%, baseline should not reach this range
-              })
 # . . Lapse rate priors ---------------------------------------------------
 #for the lapse rates, we will use a normal distribution with a strong bias 
 # towards log(odds) = -3, prob ≈0.05
@@ -664,8 +653,8 @@ prior_nl = within(prior_nl,
 
 print(prior_nl)
 ## prior                class  coef  group resp dpar      nlpar lb ub  source
-## (flat)               b                                  Base            default
-## beta(20,20)          b Intercept                        Base 0 0.75     default
+## (flat)               b                                  LogitBase            default
+## normal(0,1)          b Intercept                        LogitBase       default
 ## (flat)               b                                Inflex            default
 ## normal(3,3)          b Intercept                      Inflex            default
 ## normal(0,3)          b  typebeta                      Inflex            default
@@ -694,45 +683,19 @@ priorNull_nl = get_prior(formula = formulaNull_nl,
 priorNull_nl = within(priorNull_nl, 
               { prior[
                       class %in% 'b' & #just the fixed effects
-                      nlpar %in% 'Base' &
+                      nlpar %in% 'LogitBase' &
                       coef %in% 'Intercept' 
                       ] = with(prior_nl, #use the same prior as the full model
                                  {
                                    prior[
                                           class %in% 'b' & #just the fixed effects
-                                          nlpar %in% 'Base' &
+                                          nlpar %in% 'LogitBase' &
                                           coef %in% 'Intercept' 
                                         ]
                                  }
                                 ) 
               })
 
-#this prior is automatically bounded between 0 and 1, 
-# but we may want to set additional upper and lower bounds 
-#lower bound
-priorNull_nl = within(priorNull_nl, 
-              { lb[
-                  nlpar %in% 'Base' #
-                  ] = with(prior_nl, #use the same prior as the full model
-                           {
-                             lb[
-                               nlpar %in% 'Base' & coef %in% ''#
-                               ] 
-                           }
-                           )
-              })
-#upper bound
-priorNull_nl = within(priorNull_nl, 
-              {ub[
-                nlpar %in% 'Base' #
-              ] = with(prior_nl, #use the same prior as the full model
-                       {
-                         ub[
-                           nlpar %in% 'Base' & coef %in% ''#
-                         ] 
-                       }
-              )
-              })
 
 # . . Lapse rate priors ---------------------------------------------------
 priorNull_nl = within(priorNull_nl,
@@ -814,8 +777,8 @@ priorNull_nl = within(priorNull_nl,
 
 print(priorNull_nl)# should look like the priors for the full model, but without fixed effects "stimulus" and "type"
 ## prior                  class      coef  group resp dpar      nlpar lb   ub       source
-## (flat)                    b                                  Base  0 0.75      default
-## beta(20,20)               b Intercept                        Base  0 0.75      default
+## (flat)                    b                                  LogitBase         default
+## noraml(0,1)               b Intercept                        LogitBase         default
 ## (flat)                    b                            LogitLapse              default
 ## normal(-3,3)              b Intercept                  LogitLapse              default
 ## student_t(3, 0, 2.5)     sd                            LogitLapse  0           default
@@ -1012,7 +975,7 @@ full_sm = summary(full_fit,
 ## 
 ## Population-Level Effects: 
 ##                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-## Base_Intercept           0.48      0.03     0.39     0.53 1.00      582      888
+## LogitBase_Intercept           0.48      0.03     0.39     0.53 1.00      582      888
 ## LogitLapse_Intercept    -2.68      0.67    -5.63    -1.76 1.01      362      558
 ## LogitLapse_typebeta     -2.23      2.10    -7.18     0.81 1.00     1434      934
 ## Inflex_Intercept         2.60      0.58     1.43     3.83 1.02      467      608
@@ -1033,11 +996,13 @@ full_fix = full_sm$fixed
 full_fix_rn = rownames(full_fix)
 #The estimate for baseline is very similar to our input value of 0.5
 round(
-  with(full_fix[full_fix_rn %in% 'Base_Intercept', ],
+plogis( q = 
+  with(full_fix[full_fix_rn %in% 'LogitBase_Intercept', ],
      {c(median = Estimate,
          percentile_2.5 = `l-95% CI`,
           percentile_97.5 = `u-95% CI`)
-  }),digits = 2)
+  })
+  ),digits = 2)
 ##median  percentile_2.5 percentile_97.5 
 ## 0.48            0.39            0.53
 # the model has searched at lower values of baseline than we might reasonably expect
@@ -1358,8 +1323,8 @@ with(full_fix[full_fix_rn %in% 'Inflex_Intercept',],
      {
 arrows(x0 = `l-95% CI`,
        x1 = `u-95% CI`,
-       y0 = (full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] + 
-         (1 - full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] -
+       y0 = (plogis(full_fix[full_fix_rn %in% 'LogitBase_Intercept', 'Estimate'] + 
+         (1 - full_fix[full_fix_rn %in% 'LogitBase_Intercept', 'Estimate']) -
             - plogis(full_fix[full_fix_rn %in% 'LogitLapse_Intercept', 'Estimate']) )
        )/2,
        code = 3,
@@ -1373,8 +1338,8 @@ with(full_fix[full_fix_rn %in% 'Inflex_Intercept',],
      {
 arrows(x0 = `l-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','l-95% CI'],
        x1 = `u-95% CI` + full_fix[full_fix_rn %in% 'Inflex_typebeta','u-95% CI'],
-       y0 = (full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] + 
-         (1 - full_fix[full_fix_rn %in% 'Base_Intercept', 'Estimate'] -
+       y0 = (plogis(full_fix[full_fix_rn %in% 'LogitBase_Intercept', 'Estimate'] + 
+         (1 - full_fix[full_fix_rn %in% 'LogitBase_Intercept', 'Estimate']) -
             - plogis(full_fix[full_fix_rn %in% 'LogitLapse_Intercept', 'Estimate'] +
                        full_fix[full_fix_rn %in% 'LogitLapse_typebeta', 'Estimate']) )
        )/2,
