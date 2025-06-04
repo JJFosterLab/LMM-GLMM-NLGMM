@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2023 05 28
+#     MODIFIED:	James Foster              DATE: 2025 05 20
 #
 #  DESCRIPTION: Example two-group hypothesis tests, using the "t.test" and "wilcox.test" base R functions.
 #
@@ -9,7 +9,7 @@
 #               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
 #               Organised into subsections in overview (ctrl+shift+o)
 #
-#	   CHANGES: -
+#	   CHANGES: - Removed pairing argument (now specified in formula)
 #
 #   REFERENCES: Turner, S. (2017) Essential Statistics with R
 #               www.bioconnector.github.io/workshops/r-stats.html#continuous_variables
@@ -61,6 +61,31 @@ summary(dt)#inspect the summary statistics
 # 'value' has a mean of 1.24, condition contains the 20 text (character) labels
 
 
+# Inspect the data --------------------------------------------------------
+#use a boxplot to summarise the data's distribution
+boxplot(value ~ condition, #plot value by condition
+        data = dt, #using the data
+        ylab = 'body mass (g)', #label the y axis appropriately
+        xlab = 'condition', #label the x axis by predictor variable
+        ylim = range(dt$value), #make sure the full range of the data can be shown
+        pars = list(boxwex = 0.5), #skinnier boxes (just aesthetics)
+        outline = FALSE, #don't plot outliers, we'll add them in the next step
+        col = 'gray95', #light coloured box fill
+        cex.lab = 1.5 #axis labels large enough for your grandma to read
+        )
+#add the raw data with a vertical stripchart
+stripchart(value ~ condition, #plot value by condition
+           data = dt,#using the data
+           vertical = TRUE, #plot it vertical, like the boxplot
+           add = TRUE, #add it to the boxplot
+           method = 'jitter', #spread out the data randomly so that they don't overlap
+           pch = 21, #a dot with an outline
+           bg = 'darkblue', #blue dot
+           col = 'white', #white outline
+           cex = 1.5 #big and easy to see
+           )
+
+
 # Perform a t-test --------------------------------------------------------
 #we'll use the t.test function for a "Student's t-test"
 #We want to know if 'condition' (A or B) has an effect on value,
@@ -75,8 +100,11 @@ tt = t.test(
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   # difference could be bigger or smaller
-  # paired  = FALSE,
-  # there are no pairs of data
+    # paired  = FALSE, #20250520 this has changed. 
+    # Pairing is now specified via:
+    # Pair(value[condition %in% 'A'], value[condition %in% 'B])
+    # in the model formula
+    # anyway, there are no pairs in this data
   var.equal = TRUE # Student's t-test assumes "equal variances" in the two groups
 )
 
@@ -190,7 +218,7 @@ fct_un_A = rep(x = 'A', #repeat the letter A
 #                 min = 0.0, # values between a minimum of 0
 #                 max = 10.0) # and a maximum of 10
 dt_un_B = rnorm(n = 10, #sample size of 10
-                 mean = 3.0, #mean of 1.0
+                 mean = 3.5, #mean of 3.5
                  sd = 0.6 #  standard deviation of 0.6 (unequal variances)) 
            ) +  rpois(n = 10, # noise from a Poisson process
            lambda = 3.4) # average of 3.4 added asymmetrically
@@ -210,6 +238,30 @@ View(dt_unknown)#Close the viewing tab to return to the main script.
 #you could also read in a data frame with: dt = read.table(...)
 summary(dt_unknown)#inspect the summary statistics
 # 'value' has a mean of 5.72, condition contains the 20 text (character) labels
+
+# Inspect the data --------------------------------------------------------
+#use a boxplot to summarise the data's distribution
+boxplot(value ~ condition, #plot value by condition
+        data = dt_unknown, #using the data
+        ylab = 'body mass (g)', #label the y axis appropriately
+        xlab = 'condition', #label the x axis by predictor variable
+        ylim = range(dt_unknown$value), #make sure the full range of the data can be shown
+        pars = list(boxwex = 0.5), #skinnier boxes (just aesthetics)
+        outline = FALSE, #don't plot outliers, we'll add them in the next step
+        col = 'gray95', #light coloured box fill
+        cex.lab = 1.5 #axis labels large enough for your grandma to read
+)
+#add the raw data with a vertical stripchart
+stripchart(value ~ condition, #plot value by condition
+           data = dt_unknown,#using the data
+           vertical = TRUE, #plot it vertical, like the boxplot
+           add = TRUE, #add it to the boxplot
+           method = 'jitter', #spread out the data randomly so that they don't overlap
+           pch = 21, #a dot with an outline
+           bg = 'darkblue', #blue dot
+           col = 'white', #white outline
+           cex = 1.5 #big and easy to see
+)
 
 #calculate the mean and confidence interval for each condition
 mean_unknown = aggregate(
@@ -245,17 +297,8 @@ tt_unknown = t.test(
   var.equal = FALSE # Welch's t-test does not assume "equal variances" in the two groups
 )
 print(tt_unknown)
-#As a result, the t-test finds only a marginal difference with p>0.05
-## Welch Two Sample t-test
-##
-## data:  value by condition
-## t = -2.0264, df = 17.934, p-value = 0.05786
-## alternative hypothesis: true difference in means is not equal to 0
-## 95 percent confidence interval:
-##   -4.23305430  0.07695191
-## sample estimates:
-##   mean in group A mean in group B
-## 4.683984        6.762036
+#As a result, the t-test does find a significant difference, 
+#but we may not trust it, since the assumptions of the test were violated.
 
 #The Mann-Whitney Wilcoxon rank sum test ranks the data and compares which condition
 # has higher ranked data. It therefore does not assume any specific distribution.
@@ -275,7 +318,7 @@ print(mww)
 ## Wilcoxon rank sum exact test
 ##
 ## data:  value by condition
-## W = 23, p-value = 0.04326
+## W = 19, p-value = 0.01854
 ## alternative hypothesis: true location shift is not equal to 0
 #The Mann-Whitney Wilcoxon rank sum test correctly identified the difference.
 
