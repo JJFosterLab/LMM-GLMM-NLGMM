@@ -1,6 +1,6 @@
 # Details ---------------------------------------------------------------
 #       AUTHOR:	James Foster              DATE: 2022 06 16
-#     MODIFIED:	James Foster              DATE: 2023 05 28
+#     MODIFIED:	James Foster              DATE: 2025 06 04
 #
 #  DESCRIPTION: An example ANOVA, using the "aov" and "lm" base R functions.
 #
@@ -9,7 +9,7 @@
 #               Run line by line (ctrl+enter), or run whole script (ctrl+shift+s)
 #               Organised into subsections in overview (ctrl+shift+o)
 #
-#	   CHANGES: -
+#	   CHANGES: - Removed "paired" argument (deprecated)
 #
 #   REFERENCES: Turner, S. (2017) Essential Statistics with R
 #               www.bioconnector.github.io/workshops/r-stats.html#continuous_variables
@@ -82,7 +82,7 @@ tt = t.test(
   # search for variables 'condition' and 'value' in our data frame
   alternative = "two.sided",
   # difference could be bigger or smaller
-  paired  = FALSE,
+  # paired  = FALSE,
   # there are no pairs of data
   var.equal = TRUE # Student's t-test assumes "equal variances" in the two groups
 )
