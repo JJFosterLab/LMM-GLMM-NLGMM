@@ -191,7 +191,7 @@ print(tt_welch)
 
 #we can use the 'report' package to see how we would write this in an article
 suppressWarnings(report(tt_welch))#the warning messages are irrelevant
-## he Welch Two Sample t-test testing the difference of value by condition
+## The Welch Two Sample t-test testing the difference of value by condition
 ## (mean in group A = 1.04, mean in group B = 1.47)
 ## suggests that the effect is negative, statistically significant,
 ## and large (difference = -0.44, 95% CI [-0.68, -0.19], t(12.46) = -3.84, p = 0.002;
