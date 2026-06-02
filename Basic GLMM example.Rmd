@@ -1,0 +1,254 @@
+---
+title: "Basic GLMM example"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+  pdf_document:
+    toc: true
+fig_caption: true
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lme4)
+set.seed(17070523)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Basic GLMM example
+
+This document simulates binomial data and fits a logistic mixed-effects model using `glmer()`.
+
+## Simulate data
+
+We generate response data for individual animals, stimuli, and two stimulus types.
+
+```{r simulate-glmm}
+n_animals <- 10
+n_levels <- 7
+n_types <- 2
+replicates <- 20
+
+pop_mean <- 5.00
+pop_sd <- 1.00
+slope_mean <- 3.00
+slope_sd <- 1.03
+
+type_mean <- 2.50
+type_slope <- 3.5
+type_animal_sd <- 0.55
+extra_error_sd <- 0.10
+
+animal <- rep(x = 1:n_animals, times = n_levels)
+animal <- sort(animal)
+animal <- rep(x = animal, times = n_types)
+stimulus <- rep(x = 1:n_levels - 1, times = n_animals)
+stimulus <- rep(x = stimulus, times = n_types)
+stype <- rep(x = 1:n_types, times = n_animals * n_levels)
+stype <- sort(stype)
+
+animal <- rep(x = animal, times = replicates)
+stimulus <- rep(x = stimulus, times = replicates)
+stype <- rep(x = stype, times = replicates)
+
+base_bias_animal <- rnorm(n = n_animals, mean = pop_mean, sd = pop_sd)
+slope_animal <- rnorm(n = n_animals, mean = slope_mean, sd = slope_sd)
+type_animal <- rnorm(n = n_animals, mean = 1.0, sd = type_animal_sd)
+
+response_y <- rep(x = NA, length = n_animals * n_levels * n_types * replicates)
+for (ii in seq_along(response_y)) {
+  response_y[ii] <- base_bias_animal[animal[ii]] +
+    (stype[ii] - 1) * type_mean +
+    (slope_animal[animal[ii]] +
+       (stype[ii] - 1) * type_slope * type_animal[animal[ii]]) * stimulus[ii] +
+    rnorm(n = 1, mean = 0, sd = extra_error_sd)
+}
+
+correct_incorrect <- rbinom(n = length(response_y), size = 1, prob = plogis(q = response_y - mean(response_y)))
+
+sim_data <- data.frame(
+  correct_incorrect = correct_incorrect,
+  animal = LETTERS[animal],
+  stimulus = stimulus,
+  type = factor(stype, labels = c('alpha', 'beta'))
+)
+
+summary(sim_data)
+```
+
+## Save and load data
+
+```{r save-read-glmm}
+if (Sys.info()[['sysname']] == 'Windows') {
+  ltp <- gsub('\\\\', '/', Sys.getenv('USERPROFILE'))
+} else {
+  ltp <- Sys.getenv('HOME')
+}
+root_dir <- tryCatch(
+  file.path(dirname(sys.frame(1)$ofile)),
+  error = function(e) file.path(ltp, 'Documents')
+)
+file_name <- 'simulated_binomial_data.csv'
+write.csv(file = file.path(root_dir, file_name), x = sim_data, row.names = FALSE)
+
+dta <- read.csv(file = file.path(root_dir, file_name), header = TRUE)
+dta <- within(dta, {
+  animal <- factor(animal)
+  type <- factor(type)
+})
+
+summary(dta)
+```
+
+## Plot the binomial data
+
+We aggregate the proportion correct for each animal and stimulus level.
+
+```{r plot-glmm, fig.width=7, fig.height=5}
+clz <- sapply(length(unique(dta$animal)), colorRampPalette(c('red', 'blue', 'cyan4', 'magenta4', 'orange')))
+clz <- sample(clz)
+
+agg <- aggregate(correct_incorrect ~ stimulus * type * animal, data = dta, FUN = mean)
+head(agg)
+
+plot(NULL,
+     xlab = 'Stimulus intensity',
+     ylab = 'Proportion correct',
+     xlim = range(stimulus) * c(0.7, 1.3),
+     ylim = c(0, 1))
+abline(h = c(0, 1))
+for (aa in unique(agg$animal)) {
+  with(subset(agg, animal == aa), {
+    points(
+      x = stimulus,
+      y = correct_incorrect,
+      col = clz[which(LETTERS %in% aa)],
+      pch = c(20, 21)[1 + type %in% levels(type)[2]]
+    )
+  })
+}
+legend('topright', legend = unique(agg$animal), col = clz, pch = 20)
+legend('bottomright', legend = unique(agg$type), pch = c(20, 21))
+```
+
+## Fit GLMMs
+
+We fit a maximal logistic mixed-effects model and a null random-effects model.
+
+```{r fit-glmm}
+ctrl_opt <- glmerControl(optimizer = 'bobyqa')
+glmm.max <- glmer(
+  formula = correct_incorrect ~ stimulus * type + (1 + stimulus * type | animal),
+  data = dta,
+  control = ctrl_opt,
+  family = binomial(link = 'logit')
+)
+glmm.null <- glmer(
+  formula = correct_incorrect ~ 1 + (1 | animal),
+  data = dta,
+  family = binomial(link = 'logit')
+)
+```
+
+## Model comparison
+
+```{r compare-glmm}
+extractAIC(glmm.max)[2]
+extractAIC(glmm.null)[2]
+anova(glmm.max, glmm.null, test = 'Chisq')
+```
+
+## Model reduction
+
+We compare models with and without the interaction, stimulus, and type terms.
+
+```{r glmm-model-reduction}
+no_int <- update(glmm.max, . ~ . - stimulus:type - (1 + stimulus * type | animal) + (1 + stimulus + type | animal))
+anova(glmm.max, no_int)
+
+no_stimulus <- update(no_int, . ~ . - stimulus - (1 + stimulus + type | animal) + (1 + type | animal))
+anova(no_int, no_stimulus)
+
+no_type <- update(no_stimulus, . ~ . - type - (1 + type | animal) + (1 | animal))
+anova(no_stimulus, no_type)
+```
+
+## Post-hoc comparisons
+
+We use `emmeans` to compare overall type effects and slope differences.
+
+```{r posthoc-glmm, message=FALSE}
+library(emmeans)
+library(pbkrtest)
+
+emm_intercepts <- emmeans(glmm.max, specs = list(pairwise ~ type), adjust = 'sidak')
+summary(emm_intercepts)
+
+emm_slopes_interact <- emtrends(glmm.max, specs = list(pairwise ~ type), var = 'stimulus', adjust = 'sidak')
+summary(emm_slopes_interact)
+```
+
+## Prediction plots
+
+We compute predicted values and plot the fitted response curves for each type.
+
+```{r glmm-predictions, fig.width=7, fig.height=5}
+if (Sys.info()[['sysname']] == 'Windows') {
+  require(snow)
+}
+newdta <- with(dta, expand.grid(stimulus = seq(min(stimulus), max(stimulus), length.out = 20), type = unique(type), animal = unique(animal)))
+prd <- predict(glmm.max, newdata = newdta, type = 'response')
+
+pfun <- function(x) predict(x, newdata = newdta, type = 'response')
+avail.cores <- parallel::detectCores() - 1
+clt <- parallel::makeCluster(spec = avail.cores, type = if (Sys.info()[['sysname']] == 'Windows') 'SOCK' else 'FORK')
+parallel::clusterExport(clt, list('glmm.max', 'dta', 'newdta'))
+
+bt <- bootMer(
+  glmm.max,
+  FUN = pfun,
+  nsim = 50,
+  re.form = NULL,
+  parallel = ifelse(Sys.info()[['sysname']] == 'Windows', 'snow', 'multicore'),
+  ncpus = parallel::detectCores() - 1,
+  cl = clt
+)
+parallel::stopCluster(clt)
+
+pred_q <- aggregate(pred ~ stimulus * type, data = with(bt, data.frame(newdta, pred = c(t(t)))), FUN = quantile, probs = c(0.025, 0.975))
+mod_mean <- aggregate(prd ~ stimulus * type, data = cbind(newdta, prd), FUN = function(x) plogis(mean(qlogis(x))))
+param_data <- merge(merge(newdta, pred_q, all = TRUE), mod_mean)
+mod_pred <- within(param_data, {
+  mod_mean <- prd
+  CI_02.5 <- pred[, '2.5%']
+  CI_97.5 <- pred[, '97.5%']
+  rm(list = c('pred', 'prd'))
+})
+
+agg <- aggregate(correct_incorrect ~ stimulus * type * animal, data = dta, FUN = mean)
+plot(NULL,
+     xlab = 'Stimulus intensity',
+     ylab = 'Proportion correct',
+     xlim = range(stimulus) * c(0.7, 1.3),
+     ylim = c(0, 1))
+abline(h = c(0, 1))
+for (aa in unique(agg$animal)) {
+  with(subset(agg, animal == aa), {
+    points(x = stimulus, y = correct_incorrect, col = c('orange2', 'darkblue')[1 + type %in% 'alpha'], pch = 21)
+  })
+}
+with(subset(mod_pred, type == 'alpha'), {
+  polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)), y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]), col = adjustcolor('darkblue', alpha.f = 0.2), border = NA)
+  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'darkblue', lwd = 3)
+})
+with(subset(mod_pred, type == 'beta'), {
+  polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)), y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]), col = adjustcolor('orange2', alpha.f = 0.2), border = NA)
+  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'orange2', lwd = 3)
+})
+```

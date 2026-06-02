@@ -1,0 +1,127 @@
+---
+title: "ANOVA example"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+  pdf_document:
+    toc: true
+fig_caption: true
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(report)
+set.seed(20220622)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ANOVA example
+
+This document demonstrates a simple one-way ANOVA example using simulated data.
+
+## Enter data
+
+We simulate two groups and then add a third group for the ANOVA.
+
+```{r simulate-data}
+dt_A <- rnorm(n = 10, mean = 1.0, sd = 0.3)
+fct_A <- rep(x = 'A', times = length(dt_A))
+
+dt_B <- rnorm(n = 10, mean = 1.5, sd = 0.3)
+fct_B <- rep(x = 'B', times = length(dt_B))
+
+dt <- data.frame(
+  value = c(dt_A, dt_B),
+  condition = c(fct_A, fct_B)
+)
+
+summary(dt)
+```
+
+## Perform a t-test
+
+We begin with a two-sample Student's t-test on the two initial conditions.
+
+```{r t-test}
+tt <- t.test(
+  formula = value ~ condition,
+  data = dt,
+  alternative = "two.sided",
+  var.equal = TRUE
+)
+
+print(tt)
+suppressWarnings(report(tt))
+```
+
+## Add another condition for ANOVA
+
+We add a third condition and merge it into the dataset so that ANOVA can be used.
+
+```{r add-condition}
+dt_C <- rnorm(n = 10, mean = 1.1, sd = 0.3)
+fct_C <- rep(x = 'C', times = length(dt_C))
+
+dt_new <- data.frame(value = dt_C, condition = fct_C)
+
+dt_all <- merge.data.frame(x = dt, y = dt_new, all = TRUE)
+
+summary(dt_all)
+```
+
+## One-way ANOVA using aov()
+
+Because there are now three conditions, we use `aov()` instead of `t.test()`.
+
+```{r anova}
+av <- aov(value ~ condition, data = dt_all)
+av_summary <- summary(av)
+print(av_summary)
+
+av_Ftest <- anova(object = av, test = 'F')
+print(av_Ftest)
+
+suppressWarnings(report(av))
+```
+
+## ANOVA post-hoc tests with correction
+
+We use `emmeans` to perform pairwise comparisons with Sidak correction.
+
+```{r post-hoc, message=FALSE}
+library(emmeans)
+av_em <- emmeans(object = av, specs = pairwise ~ condition, adjust = 'sidak')
+av_ph <- emmeans::test(object = av_em)
+print(av_ph$contrasts)
+```
+
+## Use a linear model instead of ANOVA
+
+This section shows how the same question can be answered through `lm()`.
+
+```{r linear-model}
+lmd <- lm(value ~ condition, data = dt_all)
+lmd_Ftest <- anova(object = lmd, test = 'F')
+print(lmd_Ftest)
+
+suppressWarnings(report(lmd_Ftest))
+
+lmd_summary <- summary(lmd)
+print(lmd_summary)
+```
+
+## Post-hoc tests on the linear model
+
+We perform the same pairwise comparisons using the linear model object.
+
+```{r linear-model-posthoc, message=FALSE}
+lmd_em <- emmeans(object = lmd, specs = pairwise ~ condition, adjust = 'sidak')
+lmd_ph <- emmeans::test(object = lmd_em)
+print(lmd_ph$contrast)
+```

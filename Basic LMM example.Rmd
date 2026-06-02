@@ -1,0 +1,243 @@
+---
+title: "Basic LMM example"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+  pdf_document:
+    toc: true
+fig_caption: true
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lme4)
+set.seed(17070523)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Basic Linear Mixed Model example
+
+This example simulates a repeated-measures experiment and fits mixed-effects models using `lmer()`.
+
+## Simulate some data
+
+We simulate responses for multiple animals, stimulus levels, and stimulus types.
+
+```{r simulate-lmm}
+n_animals <- 10
+n_levels <- 7
+n_types <- 2
+replicates <- 20
+
+pop_mean <- 5.00
+pop_sd <- 1.00
+slope_mean <- 3.00
+slope_sd <- 1.03
+
+type_mean <- 2.50
+type_slope <- 3.5
+type_animal_sd <- 0.55
+extra_error_sd <- 0.10
+
+animal <- rep(x = 1:n_animals, times = n_levels)
+animal <- sort(animal)
+animal <- rep(x = animal, times = n_types)
+stimulus <- rep(x = 1:n_levels - 1, times = n_animals)
+stimulus <- rep(x = stimulus, times = n_types)
+stype <- rep(x = 1:n_types, times = n_animals * n_levels)
+stype <- sort(stype)
+
+animal <- rep(x = animal, times = replicates)
+stimulus <- rep(x = stimulus, times = replicates)
+stype <- rep(x = stype, times = replicates)
+
+base_bias_animal <- rnorm(n = n_animals, mean = pop_mean, sd = pop_sd)
+slope_animal <- rnorm(n = n_animals, mean = slope_mean, sd = slope_sd)
+type_animal <- rnorm(n = n_animals, mean = 1.0, sd = type_animal_sd)
+
+response_y <- rep(x = NA, length = n_animals * n_levels * n_types * replicates)
+for (ii in seq_along(response_y)) {
+  response_y[ii] <- base_bias_animal[animal[ii]] +
+    (stype[ii] - 1) * type_mean +
+    (slope_animal[animal[ii]] +
+       (stype[ii] - 1) * type_slope * type_animal[animal[ii]]) * stimulus[ii] +
+    rnorm(n = 1, mean = 0, sd = extra_error_sd)
+}
+
+sim_data <- data.frame(
+  response_y = response_y,
+  animal = LETTERS[animal],
+  stimulus = stimulus,
+  type = factor(stype, labels = c('alpha', 'beta'))
+)
+
+summary(sim_data)
+```
+
+## Save and reload data
+
+We write the data to CSV and reload it for analysis, then format categorical variables.
+
+```{r save-read-data}
+if (Sys.info()[['sysname']] == 'Windows') {
+  ltp <- gsub('\\\\', '/', Sys.getenv('USERPROFILE'))
+} else {
+  ltp <- Sys.getenv('HOME')
+}
+root_dir <- tryCatch(
+  file.path(dirname(sys.frame(1)$ofile)),
+  error = function(e) file.path(ltp, 'Documents')
+)
+file_name <- 'simulated_data.csv'
+write.csv(file = file.path(root_dir, file_name), x = sim_data, row.names = FALSE)
+
+dta <- read.csv(file = file.path(root_dir, file_name), header = TRUE)
+dta <- within(dta, {
+  animal <- factor(animal)
+  type <- factor(type)
+})
+
+summary(dta)
+```
+
+## Plot the data
+
+We visualise the individual animal responses by stimulus and type.
+
+```{r plot-lmm, fig.width=7, fig.height=5}
+clz <- sapply(length(unique(dta$animal)), colorRampPalette(c('red', 'blue', 'cyan4', 'magenta4', 'orange')))
+clz <- sample(clz)
+
+plot(NULL,
+     xlab = 'Stimulus intensity',
+     ylab = 'Response strength',
+     xlim = range(stimulus) * c(0.7, 1.3),
+     ylim = range(response_y) * c(0.7, 1.3))
+for (aa in unique(dta$animal)) {
+  with(subset(dta, animal == aa), {
+    points(
+      x = stimulus,
+      y = response_y,
+      col = clz[which(LETTERS %in% aa)],
+      pch = c(20, 21)[1 + type %in% levels(type)[2]]
+    )
+  })
+}
+legend('topright', legend = unique(dta$animal), col = clz, pch = 20, cex = 0.7)
+legend('bottomright', legend = unique(dta$type), pch = c(20, 21), cex = 0.7)
+```
+
+## Fit the maximal model
+
+We fit a maximal linear mixed model with random intercepts and slopes for each animal.
+
+```{r fit-maximal,library=FALSE}
+ctrl_opt <- lmerControl(optimizer = 'bobyqa')
+mixmod.max <- lmer(
+  formula = response_y ~ stimulus * type + (1 + stimulus * type | animal),
+  data = dta,
+  control = ctrl_opt
+)
+mixmod.null <- lmer(formula = response_y ~ 1 + (1 | animal), data = dta)
+```
+
+## Compare models
+
+We compare the maximal model to the null model using AIC and a likelihood ratio test.
+
+```{r model-comparison}
+extractAIC(mixmod.max)[2]
+extractAIC(mixmod.null)[2]
+anova(mixmod.max, mixmod.null, test = 'Chisq')
+```
+
+## Inspect the maximal model ANOVA
+
+```{r inspect-maximal}
+anova(mixmod.max)
+```
+
+## Model reduction
+
+We test whether interaction, stimulus, or type can be removed without worsening model fit.
+
+```{r model-reduction}
+no_int <- update(mixmod.max, . ~ . - stimulus:type - (1 + stimulus * type | animal) + (1 + stimulus + type | animal))
+anova(mixmod.max, no_int)
+
+no_stimulus <- update(no_int, . ~ . - stimulus - (1 + stimulus + type | animal) + (1 + type | animal))
+anova(no_int, no_stimulus)
+
+no_type <- update(no_stimulus, . ~ . - type - (1 + type | animal) + (1 | animal))
+anova(no_stimulus, no_type)
+```
+
+## Post-hoc comparisons
+
+We use `emmeans` and `pbkrtest` to make pairwise comparisons for type and slope effects.
+
+```{r posthoc-lmm, message=FALSE}
+library(emmeans)
+library(pbkrtest)
+
+emm_intercepts <- emmeans(mixmod.max, specs = list(pairwise ~ type), adjust = 'sidak')
+summary(emm_intercepts)
+
+emm_slopes_interact <- emtrends(mixmod.max, specs = list(pairwise ~ type), var = 'stimulus', adjust = 'sidak')
+summary(emm_slopes_interact)
+```
+
+## Prediction plots
+
+We generate fitted predictions and plot the model with confidence intervals.
+
+```{r plot-predictions, fig.width=7, fig.height=5}
+newdta <- with(dta, expand.grid(stimulus = unique(stimulus), type = unique(type), animal = unique(animal)))
+prd <- predict(mixmod.max, newdata = newdta)
+
+pfun <- function(x) predict(x, newdata = newdta)
+avail.cores <- parallel::detectCores() - 1
+clt <- parallel::makeCluster(spec = avail.cores, type = if (Sys.info()[['sysname']] == 'Windows') 'SOCK' else 'FORK')
+parallel::clusterExport(clt, list('mixmod.max', 'dta', 'newdta'))
+
+bt <- bootMer(
+  mixmod.max,
+  FUN = pfun,
+  nsim = 100,
+  re.form = NA,
+  parallel = ifelse(Sys.info()[['sysname']] == 'Windows', 'snow', 'multicore'),
+  ncpus = parallel::detectCores() - 1,
+  cl = clt
+)
+parallel::stopCluster(clt)
+
+param_q <- aggregate(pred ~ stimulus * type, data = with(bt, data.frame(newdta, pred = c(t(t)))), FUN = quantile, probs = c(0.025, 0.975))
+mod_mean <- aggregate(prd ~ stimulus * type, data = cbind(newdta, prd), FUN = mean)
+param_data <- merge(merge(newdta, param_q, all = TRUE), mod_mean)
+mod_pred <- within(param_data, {
+  mod_mean <- prd
+  CI_02.5 <- pred[, '2.5%']
+  CI_97.5 <- pred[, '97.5%']
+  rm(list = c('pred', 'prd'))
+})
+
+with(dta, plot(x = stimulus, y = response_y, bg = adjustcolor(col = c('orange2', 'darkblue')[1 + type %in% 'alpha'], alpha.f = 0.5), col = 'black', pch = 21))
+with(subset(mod_pred, type %in% 'alpha'), {
+  polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)),
+          y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]),
+          col = adjustcolor('darkblue', alpha.f = 0.2), border = NA)
+  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'darkblue', lwd = 3)
+})
+with(subset(mod_pred, type %in% 'beta'), {
+  polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)),
+          y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]),
+          col = adjustcolor('orange2', alpha.f = 0.2), border = NA)
+  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'orange2', lwd = 3)
+})
+```
