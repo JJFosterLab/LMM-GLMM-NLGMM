@@ -9,7 +9,7 @@ output:
     toc: true
   pdf_document:
     toc: true
-fig_caption: true
+    fig_caption: true
 editor_options:
   markdown:
     wrap: sentence

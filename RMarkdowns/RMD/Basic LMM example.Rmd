@@ -9,7 +9,7 @@ output:
     toc: true
   pdf_document:
     toc: true
-fig_caption: true
+    fig_caption: true
 editor_options:
   markdown:
     wrap: sentence
@@ -160,13 +160,18 @@ anova(mixmod.max)
 We test whether interaction, stimulus, or type can be removed without worsening model fit.
 
 ```{r model-reduction}
-no_int <- update(mixmod.max, . ~ . - stimulus:type - (1 + stimulus * type | animal) + (1 + stimulus + type | animal))
+no_int <- update(mixmod.max, . ~ . - stimulus:type - 
+                   (1 + stimulus * type | animal) + 
+                   (1 + stimulus + type | animal))
 anova(mixmod.max, no_int)
 
-no_stimulus <- update(no_int, . ~ . - stimulus - (1 + stimulus + type | animal) + (1 + type | animal))
+no_stimulus <- update(no_int, . ~ . - stimulus - 
+                        (1 + stimulus + type | animal) + 
+                        (1 + type | animal))
 anova(no_int, no_stimulus)
 
-no_type <- update(no_stimulus, . ~ . - type - (1 + type | animal) + (1 | animal))
+no_type <- update(no_stimulus, . ~ . - type - 
+                    (1 + type | animal) + (1 | animal))
 anova(no_stimulus, no_type)
 ```
 
@@ -178,10 +183,12 @@ We use `emmeans` and `pbkrtest` to make pairwise comparisons for type and slope 
 library(emmeans)
 library(pbkrtest)
 
-emm_intercepts <- emmeans(mixmod.max, specs = list(pairwise ~ type), adjust = 'sidak')
+emm_intercepts <- emmeans(mixmod.max, specs = list(pairwise ~ type), 
+                          adjust = 'sidak')
 summary(emm_intercepts)
 
-emm_slopes_interact <- emtrends(mixmod.max, specs = list(pairwise ~ type), var = 'stimulus', adjust = 'sidak')
+emm_slopes_interact <- emtrends(mixmod.max, specs = list(pairwise ~ type), 
+                                var = 'stimulus', adjust = 'sidak')
 summary(emm_slopes_interact)
 ```
 
@@ -190,12 +197,14 @@ summary(emm_slopes_interact)
 We generate fitted predictions and plot the model with confidence intervals.
 
 ```{r plot-predictions, fig.width=7, fig.height=5}
-newdta <- with(dta, expand.grid(stimulus = unique(stimulus), type = unique(type), animal = unique(animal)))
+newdta <- with(dta, expand.grid(stimulus = unique(stimulus), 
+                                type = unique(type), 
+                                animal = unique(animal)))
 prd <- predict(mixmod.max, newdata = newdta)
 
 pfun <- function(x) predict(x, newdata = newdta)
 avail.cores <- parallel::detectCores() - 1
-clt <- parallel::makeCluster(spec = avail.cores, type = if (Sys.info()[['sysname']] == 'Windows') 'SOCK' else 'FORK')
+clt <- parallel::makeCluster(spec = avail.cores, type = 'PSOCK')
 parallel::clusterExport(clt, list('mixmod.max', 'dta', 'newdta'))
 
 bt <- bootMer(
@@ -203,14 +212,19 @@ bt <- bootMer(
   FUN = pfun,
   nsim = 100,
   re.form = NA,
-  parallel = ifelse(Sys.info()[['sysname']] == 'Windows', 'snow', 'multicore'),
+  parallel = 'snow',
   ncpus = parallel::detectCores() - 1,
   cl = clt
 )
 parallel::stopCluster(clt)
 
-param_q <- aggregate(pred ~ stimulus * type, data = with(bt, data.frame(newdta, pred = c(t(t)))), FUN = quantile, probs = c(0.025, 0.975))
-mod_mean <- aggregate(prd ~ stimulus * type, data = cbind(newdta, prd), FUN = mean)
+param_q <- aggregate(pred ~ stimulus * type, 
+                     data = with(bt, data.frame(newdta, pred = c(t(t)))), 
+                     FUN = quantile, 
+                     probs = c(0.025, 0.975))
+mod_mean <- aggregate(prd ~ stimulus * type, 
+                      data = cbind(newdta, prd), 
+                      FUN = mean)
 param_data <- merge(merge(newdta, param_q, all = TRUE), mod_mean)
 mod_pred <- within(param_data, {
   mod_mean <- prd
@@ -219,17 +233,26 @@ mod_pred <- within(param_data, {
   rm(list = c('pred', 'prd'))
 })
 
-with(dta, plot(x = stimulus, y = response_y, bg = adjustcolor(col = c('orange2', 'darkblue')[1 + type %in% 'alpha'], alpha.f = 0.5), col = 'black', pch = 21))
+with(dta, plot(x = stimulus, y = response_y, 
+               bg = adjustcolor(col = c('orange2', 'darkblue')[
+                 1 + type %in% 'alpha'], alpha.f = 0.5), 
+               col = 'black', pch = 21))
 with(subset(mod_pred, type %in% 'alpha'), {
   polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)),
-          y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]),
+          y = c(CI_02.5[order(stimulus)], 
+                CI_97.5[order(stimulus, decreasing = TRUE)]),
           col = adjustcolor('darkblue', alpha.f = 0.2), border = NA)
-  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'darkblue', lwd = 3)
+  lines(sort(stimulus), 
+        mod_mean[order(stimulus)], 
+        col = 'darkblue', lwd = 3)
 })
 with(subset(mod_pred, type %in% 'beta'), {
   polygon(x = c(sort(stimulus), sort(stimulus, decreasing = TRUE)),
-          y = c(CI_02.5[order(stimulus)], CI_97.5[order(stimulus, decreasing = TRUE)]),
+          y = c(CI_02.5[order(stimulus)], 
+                CI_97.5[order(stimulus, decreasing = TRUE)]),
           col = adjustcolor('orange2', alpha.f = 0.2), border = NA)
-  lines(sort(stimulus), mod_mean[order(stimulus)], col = 'orange2', lwd = 3)
+  lines(sort(stimulus),
+        mod_mean[order(stimulus)], 
+        col = 'orange2', lwd = 3)
 })
 ```
