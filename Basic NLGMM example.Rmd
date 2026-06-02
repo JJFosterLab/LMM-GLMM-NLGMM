@@ -103,15 +103,7 @@ summary(sim_data)
 ## Save and load data
 
 ```{r save-read-nlgmm}
-if (Sys.info()[['sysname']] == 'Windows') {
-  ltp <- gsub('\\\\', '/', Sys.getenv('USERPROFILE'))
-} else {
-  ltp <- Sys.getenv('HOME')
-}
-root_dir <- tryCatch(
-  file.path(dirname(sys.frame(1)$ofile)),
-  error = function(e) file.path(ltp, 'Documents')
-)
+root_dir <- file.path(dirname(knitr::current_input(dir = TRUE)), 'Simulated Data')
 file_name <- 'simulated_nonlinear_data.csv'
 write.csv(file = file.path(root_dir, file_name), x = sim_data, row.names = FALSE)
 
