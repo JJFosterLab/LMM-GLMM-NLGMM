@@ -16,4 +16,5 @@ For an applied example of an NLGMM see https://github.com/JohnKirwan/Olsson_colo
 
 ## Work in progress!
 As of 13/06/2023 the LMM, GLMM and NLGMM scripts are mostly complete.
-Markdowns of each script will be added in future versions.
+
+05/06/2026 Markdowns of each script, printed to PDF and HTML, are now available.
