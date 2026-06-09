@@ -1,0 +1,216 @@
+---
+title: "Hypothesis testing example"
+author: "James Foster"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+  pdf_document:
+    toc: true
+    fig_caption: true
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(report)
+set.seed(20220622)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Hypothesis testing example
+
+This example demonstrates two-group hypothesis tests using base R functions like `t.test` and `wilcox.test`. 
+It also uses the `report` package for easy reporting of results.
+
+## Enter data
+
+We will simulate random data for two experimental conditions, A and B.
+
+```{r simulate-data}
+dt_A <- rnorm(n = 10, mean = 1.0, sd = 0.3)
+fct_A <- rep(x = 'A', times = length(dt_A))
+
+dt_B <- rnorm(n = 10, mean = 1.5, sd = 0.3)
+fct_B <- rep(x = 'B', times = length(dt_B))
+
+dt <- data.frame(
+  value = c(dt_A, dt_B),
+  condition = c(fct_A, fct_B)
+)
+
+summary(dt)
+```
+
+## Inspect the data
+
+We will visualise the distribution with a boxplot and raw data points.
+
+```{r inspect-data, fig.width=6, fig.height=4}
+boxplot(value ~ condition,
+        data = dt,
+        ylab = 'body mass (g)',
+        xlab = 'condition',
+        ylim = range(dt$value),
+        pars = list(boxwex = 0.5),
+        outline = FALSE,
+        col = 'gray95',
+        cex.lab = 1.5)
+
+stripchart(value ~ condition,
+           data = dt,
+           vertical = TRUE,
+           add = TRUE,
+           method = 'jitter',
+           pch = 21,
+           bg = 'darkblue',
+           col = 'white',
+           cex = 1.5)
+```
+
+## Perform a Student's t-test
+
+We ask whether `condition` predicts `value`, using a two-sided Student's t-test with equal variances.
+
+```{r t-test}
+tt <- t.test(
+  formula = value ~ condition,
+  data = dt,
+  alternative = "two.sided",
+  var.equal = TRUE
+)
+
+print(tt)
+
+suppressWarnings(report(tt))
+```
+
+## Welch's t-test for unequal variances
+
+Now we simulate a dataset where the two groups have different variances and apply Welch's t-test.
+
+```{r simulate-unequal}
+dt_unequal <- within(dt, {
+  value[condition %in% 'B'] <- rnorm(n = 10, mean = 1.5, sd = 0.15)
+})
+
+summary(dt_unequal)
+
+tt_welch <- t.test(
+  formula = value ~ condition,
+  data = dt_unequal,
+  alternative = "two.sided",
+  var.equal = FALSE
+)
+
+print(tt_welch)
+
+suppressWarnings(report(tt_welch))
+```
+
+# Non-normal distributions and the Mann-Whitney test
+
+For data that may violate the normality assumption, we simulate an asymmetric distribution and compare groups using Welch's t-test and the Mann-Whitney rank sum test.
+
+```{r simulate-nonnormal}
+dt_un_A <- rnorm(n = 10, mean = 1.0, sd = 0.3) + rpois(n = 10, lambda = 3.4)
+fct_un_A <- rep(x = 'A', times = length(dt_un_A))
+
+dt_un_B <- rnorm(n = 10, mean = 3.5, sd = 0.6) + rpois(n = 10, lambda = 3.4)
+fct_un_B <- rep(x = 'B', times = length(dt_un_B))
+
+dt_unknown <- data.frame(
+  value = c(dt_un_A, dt_un_B),
+  condition = c(fct_un_A, fct_un_B)
+)
+
+summary(dt_unknown)
+```
+
+```{r inspect-nonnormal, fig.width=6, fig.height=4}
+boxplot(value ~ condition,
+        data = dt_unknown,
+        ylab = 'body mass (g)',
+        xlab = 'condition',
+        ylim = range(dt_unknown$value),
+        pars = list(boxwex = 0.5),
+        outline = FALSE,
+        col = 'gray95',
+        cex.lab = 1.5)
+
+stripchart(value ~ condition,
+           data = dt_unknown,
+           vertical = TRUE,
+           add = TRUE,
+           method = 'jitter',
+           pch = 21,
+           bg = 'darkblue',
+           col = 'white',
+           cex = 1.5)
+```
+
+```{r mean-ci}
+mean_unknown <- aggregate(
+  value ~ condition,
+  data = dt_unknown,
+  FUN = function(x) {
+    sum_stat <- mean(x) + 1.96 * c(0, -1, 1) * sd(x) / sqrt(length(x))
+    names(sum_stat) <- c('mean', 'lower CI', 'upper CI')
+    return(sum_stat)
+  }
+)
+
+print(mean_unknown)
+```
+
+```{r t-test-unknown}
+tt_unknown <- t.test(
+  formula = value ~ condition,
+  data = dt_unknown,
+  alternative = "two.sided",
+  var.equal = FALSE
+)
+
+print(tt_unknown)
+
+mww <- wilcox.test(
+  value ~ condition,
+  data = dt_unknown,
+  alternative = "two.sided"
+)
+
+print(mww)
+```
+
+## Rank-transformed visualisation
+
+The plot below shows both the original values and the rank-transformed values for the two conditions.
+
+```{r rank-plot, fig.width=10, fig.height=4}
+par(mfrow = c(1, 2))
+with(dt_unknown, {
+  hist(value[condition %in% 'A'],
+       breaks = 1e2,
+       col = 'blue',
+       xlim = range(value),
+       xlab = 'value',
+       main = 'original values')
+  hist(value[condition %in% 'B'],
+       breaks = 1e2,
+       col = 'red',
+       add = TRUE)
+  hist(rank(value)[condition %in% 'A'],
+       breaks = 1e2,
+       col = 'blue',
+       xlim = c(0, max(rank(value))),
+       xlab = 'value',
+       main = 'rank-transformed')
+  hist(rank(value)[condition %in% 'B'],
+       breaks = 1e2,
+       col = 'red',
+       add = TRUE)
+})
+```
